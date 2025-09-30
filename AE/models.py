@@ -79,6 +79,40 @@ class AE_0(nn.Module):
 
 
 
+    def encode_truncated(self, data, num_hidden_layer):
+        """
+        Encodes the data up to the specified hidden layer (not including the bottleneck).
+        num_hidden_layer: index of the hidden layer (starting from 1)
+        """
+        if data.dim() > 2:
+            data_flat = data.view(-1, self.input_dim)
+        else:
+            data_flat = data
+
+        x = data_flat
+        layer_count = 0
+        for layer in self.encoder:
+            x = layer(x)
+            if isinstance(layer, nn.Linear):
+                layer_count += 1
+                if layer_count == num_hidden_layer:
+                    break
+        return x
+
+
+
+    def decode_from_hidden(self, data, num_hidden_layer):
+        """
+        Decodes data starting from the output of a given encoder hidden layer.
+        num_hidden_layer: index of the encoder hidden layer (starting from 1)
+        """
+
+        hidden = self.encode_truncated(data, num_hidden_layer)
+
+        decoded = self.decoder(hidden)
+        return decoded
+
+
 
     def encode(self, data):
         if data.dim() > 2:
@@ -86,7 +120,7 @@ class AE_0(nn.Module):
         else:
             data_flat = data
         return self.encoder(data_flat)
-
+    
 
 
     def decode(self, data):
@@ -121,6 +155,9 @@ class AE_0(nn.Module):
             for i in range((len(self.decoder))):
                 if isinstance(self.decoder[i], nn.Linear):
                     nn.init.kaiming_normal_(self.decoder[i].weight)
+
+
+    
 
 
 

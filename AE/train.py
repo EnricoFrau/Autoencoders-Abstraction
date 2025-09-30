@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import numpy as np
+import random
 
 
 
@@ -364,6 +365,88 @@ def train_ProgressiveAE(
 
 
 
+
+# –––––––––––––––––––––––––––––––––– TRAIN WITH MIXED INPUTS –––––––––––––––––––––––––––––––––––––
+
+
+def train_mixed_hidden(
+    model,
+    teacher_model,
+    epochs,
+    train_loader,
+    val_loader,
+    optimizer,
+    writer,
+    mix_percentage=0.1,
+    scheduler=None,
+    save_tensorboard_parameters=False,
+    starting_epoch=0
+):
+    global_batch_idx = 0
+    hidden_layers = model.number_of_hidden_layers
+
+    teacher_model.eval()
+
+    for epoch in range(epochs):
+        model.train()
+        train_loss = 0.0
+
+        for batch_idx, (data, _) in enumerate(train_loader):
+            data = data.to(model.device)
+            optimizer.zero_grad()
+
+            if random.random() < mix_percentage:
+                # Choose a random hidden layer before the bottleneck
+                n = random.randint(1, hidden_layers)
+                # Encode with teacher up to n-th hidden layer
+                hidden = teacher_model.encode_truncated(data, num_hidden_layer=n)
+                # Decode with model from that hidden layer
+                output = model.decode_from_hidden(hidden, num_hidden_layer=n)
+            else:
+                # Standard forward pass
+                output = model(data)
+
+            loss = nn.MSELoss()(output, data)
+            loss.backward()
+            optimizer.step()
+            train_loss += loss.item()
+            global_batch_idx += 1
+
+        if scheduler is not None:
+            scheduler.step()
+
+        writer.add_scalar(
+            "Loss/train", train_loss / len(train_loader.dataset), global_step=(epoch + starting_epoch)
+        )
+
+        print(
+            "Epoch: {}/{}, Average loss: {:.4f}".format(
+                epoch + 1, epochs, train_loss / len(train_loader.dataset)
+            )
+        )
+
+        model.eval()
+        val_loss = 0.0
+        with torch.no_grad():
+            for batch_idx, (data, _) in enumerate(val_loader):
+                data = data.to(model.device)
+                output = model(data)
+                loss = nn.MSELoss()(output, data)
+                val_loss += loss.item()
+
+        writer.add_scalar(
+            "Loss/val", val_loss / len(val_loader.dataset), global_step=(epoch + starting_epoch)
+        )
+
+        if save_tensorboard_parameters:
+            for name, param in model.named_parameters():
+                writer.add_histogram(name, param, global_step=epoch)
+                writer.add_histogram(f"{name}.grad", param.grad, global_step=epoch)
+
+    writer.close()
+    print(
+        f"Training completed. Final training loss: {train_loss / len(train_loader.dataset)}, Validation loss: {val_loss / len(val_loader.dataset)}"
+    )
 
 
 

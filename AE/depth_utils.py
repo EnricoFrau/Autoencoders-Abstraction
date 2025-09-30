@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader
 import torch
 
 from AE.utils import calc_hfm_kld
-from AE.utils import compute_emp_states_dict
+from AE.utils import compute_emp_states_dict, compute_sampled_emp_states_dict
 from AE.utils import calc_Z_theoretical
 from AE.utils import calc_ms
 
@@ -275,7 +275,10 @@ def compute_bottleneck_neurons_activ_freq(
         (i.e., the proportion of samples for which the neuron is active).
     """
     
-    emp_states_dict = compute_emp_states_dict(model, dataloader, binarize_threshold)
+    if binarize_threshold is None:
+        emp_states_dict = compute_sampled_emp_states_dict(model, dataloader)
+    else:
+        emp_states_dict = compute_emp_states_dict(model, dataloader, binarize_threshold)
 
     if flip_gauge:
         emp_states_dict = flip_gauge_bits(emp_states_dict)
@@ -395,10 +398,11 @@ def compute_emp_states_dict_gauged(                 # USED IN calc_hfm_kld_with_
         dict: Empirical state dictionary with columns permuted and gauge-flipped to minimize KL divergence with the HFM model.
         tuple (optional): The optimal permutation of latent dimensions (if return_perm is True).
     """
-
-    emp_states_dict = compute_emp_states_dict(
-        model, data_loader, verbose=verbose, binarize_threshold=binarize_threshold
-    )
+    
+    if binarize_threshold is None:
+        emp_states_dict = compute_sampled_emp_states_dict(model, data_loader)
+    else:
+        emp_states_dict = compute_emp_states_dict(model, data_loader, binarize_threshold)
 
     if flip_gauge:
         emp_states_dict = flip_gauge_bits(emp_states_dict)

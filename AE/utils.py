@@ -10,6 +10,50 @@ from collections import Counter
 
 
 
+def compute_sampled_emp_states_dict(model, dataloader, num_samples=10, verbose=False):
+    """
+    Samples binary internal representations from the autoencoder's latent probabilities.
+
+    Args:
+        model: The autoencoder model with sigmoid activation before bottleneck
+        dataloader: DataLoader containing the dataset
+        num_samples: Number of samples per encoded vector
+        verbose: Whether to print summary info
+
+    Returns:
+        dict: Dictionary where keys are binary state tuples and values are frequencies
+    """
+    model.eval()
+    device = model.device
+    state_counts = defaultdict(int)
+    total_samples = 0
+
+    with torch.no_grad():
+        for batch_data, _ in dataloader:
+            batch_data = batch_data.to(device)
+            latent_vectors = model.encode(batch_data.view(batch_data.size(0), -1))  # Probabilities
+
+            # Sample num_samples binarized vectors for each latent vector using torch.bernoulli
+            for latent_vec in latent_vectors:
+                probs = latent_vec.detach().cpu()
+                samples = torch.bernoulli(probs.repeat(num_samples, 1))
+                for sampled_vec in samples:
+                    state_tuple = tuple(sampled_vec.int().numpy())
+                    state_counts[state_tuple] += 1
+                    total_samples += 1
+
+    emp_states_dict = {k: v / total_samples for k, v in state_counts.items()}
+
+    if verbose:
+        print(f"Total samples processed: {total_samples}")
+        print(f"Number of unique binary states found: {len(emp_states_dict)}")
+
+    return emp_states_dict
+
+
+
+
+
 def compute_emp_states_dict(model, dataloader, binarize_threshold=0.5, verbose=False):            # USED IN DEPTH.UTILS
     """
     Extracts binary internal representations from the autoencoder and counts their frequencies.
