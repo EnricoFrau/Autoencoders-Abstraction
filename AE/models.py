@@ -81,24 +81,35 @@ class AE_0(nn.Module):
 
     def encode_truncated(self, data, num_hidden_layer):
         """
-        Encodes the data up to the specified hidden layer (not including the bottleneck).
-        num_hidden_layer: index of the hidden layer (starting from 1)
+        Encodes the data up to and including the activation of the specified hidden layer.
+        num_hidden_layer: index of the hidden layer (starting from 1), not counting the bottleneck.
         """
         if data.dim() > 2:
-            data_flat = data.view(-1, self.input_dim)
+            x = data.view(-1, self.input_dim)
         else:
-            data_flat = data
+            x = data
 
-        x = data_flat
-        layer_count = 0
+        hidden_linear_count = 0
+        passed_target_linear = False
+
         for layer in self.encoder:
-            x = layer(x)
+            # Count only Linear layers (these delimit hidden blocks)
             if isinstance(layer, nn.Linear):
-                layer_count += 1
-                if layer_count == num_hidden_layer:
-                    break
-        return x
+                hidden_linear_count += 1
 
+            # Always apply the layer
+            x = layer(x)
+
+            # When we have just applied the target hidden Linear, mark it
+            if isinstance(layer, nn.Linear) and hidden_linear_count == num_hidden_layer:
+                passed_target_linear = True
+                continue
+
+            # After passing the target Linear, stop right after its activation
+            if passed_target_linear and isinstance(layer, self.activation_fn):
+                break
+
+        return x
 
 
     def decode_from_hidden(self, data, num_hidden_layer):
@@ -107,9 +118,20 @@ class AE_0(nn.Module):
         num_hidden_layer: index of the encoder hidden layer (starting from 1)
         """
 
-        hidden = self.encode_truncated(data, num_hidden_layer)
+        x = data
 
-        decoded = self.decoder(hidden)
+        layer_count = 0
+        for layer in self.encoder:
+            if isinstance(layer, nn.Linear):
+                layer_count += 1
+            if layer_count > num_hidden_layer:
+                x = layer(x)
+            else:
+                # skip layers up to num_hidden_layer
+                continue
+
+        # Now x is at the bottleneck shape, pass through decoder
+        decoded = self.decoder(x)
         return decoded
 
 

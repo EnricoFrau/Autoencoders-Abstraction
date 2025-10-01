@@ -406,6 +406,12 @@ def train_mixed_hidden(
                 # Standard forward pass
                 output = model(data)
 
+            if output.shape != data.shape:
+                # Safe reshape when output is flat and target is image-shaped
+                if output.dim() == 2 and data.dim() > 2 and output.size(0) == data.size(0):
+                    output = output.view_as(data)
+
+
             loss = nn.MSELoss()(output, data)
             loss.backward()
             optimizer.step()

@@ -17,6 +17,117 @@ from AE.models import AE_0
 
 
 # –––––––––––––––––––––––––––––––––––– EXPORTED TO DEPTH_ANALYSIS –––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––
+def write_encoded_dataset_on_file_sigmoid_output(data_loader, model_kwargs, device, model_path_kwargs, num_hidden_layers_range):
+    """
+    Encodes a dataset using autoencoder models with varying numbers of hidden layers and writes the encoded outputs to text files.
+
+    For each value in `num_hidden_layers_range`, this function:
+        - Loads the corresponding autoencoder model.
+        - Encodes the input data from `data_loader` using the model's encoder.
+        - Writes each encoded vector to a text file, with values formatted as tuples and separated by commas.
+
+    Args:
+        data_loader (torch.utils.data.DataLoader): DataLoader providing the input data to encode.
+        model_kwargs (dict): Keyword arguments for constructing the AE_0 model.
+        device (torch.device): Device on which to run the model (e.g., 'cpu' or 'cuda').
+        model_path_kwargs (dict): Dictionary containing parameters for constructing the model path and output file path.
+        num_hidden_layers_range (iterable): Iterable of integers specifying the number of hidden layers to use for each model.
+
+    Output:
+        For each number of hidden layers, a text file is created containing the encoded dataset, with one encoded vector per line.
+    """
+    
+    for num_hidden_layers in num_hidden_layers_range:
+
+        my_model = AE_0(
+            **model_kwargs,
+            hidden_layers=num_hidden_layers
+        ).to(device)
+        model_path = f"../models/{model_path_kwargs['output_activation_encoder']}/{model_path_kwargs['train_type']}/{model_path_kwargs['latent_dim']}/{model_path_kwargs['dataset']}/dr{model_path_kwargs['decrease_rate']}_{num_hidden_layers}hl_{model_path_kwargs['train_num']}.pth"
+        my_model.load_state_dict(torch.load(model_path, map_location=device))
+        save_dir = f"../pure encoding/{model_path_kwargs['output_activation_encoder']}/{model_path_kwargs['train_type']}/{model_path_kwargs['latent_dim']}/{model_path_kwargs['dataset']}/{model_path_kwargs['train_num']}/{num_hidden_layers}hl.txt"
+
+        my_model.eval()
+        with open(save_dir, 'w') as f:
+            with torch.no_grad():
+                for batch in data_loader:
+                    # If batch is (data, label), take only data
+                    if isinstance(batch, (list, tuple)):
+                        data = batch[0]
+                    else:
+                        data = batch
+                    data = data.to(device)
+                    encoded = my_model.encode(data)
+                    # Flatten each encoded vector and write as space-separated values
+                    for vec in encoded.cpu().numpy():
+                        formatted = '(' + ', '.join(f"{v:.8f}" for v in vec.tolist()) + ')'
+                        f.write(formatted + '\n')
+
+
+
+
+def compute_dataset_klds_gs_dict_from_sampled_binarized_vectors_(dataset, data_loader, model_kwargs, device, model_path_kwargs, num_hidden_layers_range, dataset_klds_dict = None, dataset_gs_dict = None):
+    """
+    Computes and stores the Kullback-Leibler divergences (KLDs) and optimal 'g' values for a given dataset
+    using autoencoder models with varying numbers of hidden layers.
+
+    For each value in `num_hidden_layers_range`, this function:
+        - Loads the corresponding autoencoder model.
+        - Computes the KLD and optimal 'g' value using sampled binarized latent vectors.
+        - Appends the results to the provided or newly created dictionaries for the specified dataset.
+
+    Args:
+        dataset (str): Name of the dataset (e.g., 'MNIST', 'EMNIST', '2MNIST').
+        data_loader (torch.utils.data.DataLoader): DataLoader providing the input data.
+        model_kwargs (dict): Keyword arguments for constructing the AE_0 model.
+        device (torch.device): Device on which to run the model (e.g., 'cpu' or 'cuda').
+        model_path_kwargs (dict): Dictionary containing parameters for constructing the model path.
+        num_hidden_layers_range (iterable): Iterable of integers specifying the number of hidden layers to use for each model.
+        dataset_klds_dict (dict, optional): Dictionary to store KLDs for each dataset. If None, a new one is created.
+        dataset_gs_dict (dict, optional): Dictionary to store 'g' values for each dataset. If None, a new one is created.
+
+    Returns:
+        tuple: (dataset_klds_dict, dataset_gs_dict) containing the computed KLDs and 'g' values for the given dataset.
+    """
+
+    if dataset_klds_dict is None:
+        dataset_klds_dict = {
+            '2MNIST': [],
+            'MNIST': [],
+            'EMNIST': []}
+    if dataset_gs_dict is None:
+        dataset_gs_dict = {
+            '2MNIST': [],
+            'MNIST': [],
+            'EMNIST': []}
+
+
+    for num_hidden_layers in num_hidden_layers_range:
+
+        model = AE_0(
+            **model_kwargs,
+            hidden_layers=num_hidden_layers
+        ).to(device)
+        model_path = f"../models/{model_path_kwargs['output_activation_encoder']}/{model_path_kwargs['train_type']}/{model_path_kwargs['latent_dim']}/{model_path_kwargs['dataset']}/dr{model_path_kwargs['decrease_rate']}_{num_hidden_layers}hl_{model_path_kwargs['train_num']}.pth"
+        model.load_state_dict(torch.load(model_path, map_location=device))
+        
+
+        model.eval()
+
+        kld, g = calc_hfm_kld_with_optimal_g(model, data_loader, return_g=True, binarize_threshold=None)
+
+        dataset_klds_dict[dataset].append(kld)
+        dataset_gs_dict[dataset].append(g)
+
+        #save_dir = f"../pure encoding/{model_path_kwargs['output_activation_encoder']}/{model_path_kwargs['train_type']}/{model_path_kwargs['latent_dim']}/{model_path_kwargs['dataset']}/{model_path_kwargs['train_num']}/{num_hidden_layers}hl.txt"
+        #save_dir = f"../Images/relu output/simultaneous train/{latent_dim}features/"
+        save_dir = None
+
+    return dataset_klds_dict, dataset_gs_dict
+
+
+
+
 
 def compute_dataset_klds_gs_dict_with_optimal_threshold_(dataset, data_loader, device, model_kwargs, model_path_kwargs, binarize_threshold_range, num_hidden_layers_range, dataset_klds_dict = None, dataset_gs_dict = None, verbose=True):
     """
@@ -400,7 +511,7 @@ def compute_emp_states_dict_gauged(                 # USED IN calc_hfm_kld_with_
     """
     
     if binarize_threshold is None:
-        emp_states_dict = compute_sampled_emp_states_dict(model, data_loader)
+        emp_states_dict = compute_sampled_emp_states_dict(model, data_loader, num_samples=5)
     else:
         emp_states_dict = compute_emp_states_dict(model, data_loader, binarize_threshold)
 
