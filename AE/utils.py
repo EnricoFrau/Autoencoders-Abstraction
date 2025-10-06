@@ -275,3 +275,33 @@ def calc_hfm_kld(emp_states_dict, g):         # USED IN DEPTH.UTILS
     kl_div = -empirical_entropy + g_times_H_s + log_Z
 
     return kl_div
+
+
+
+def calc_hfm_marginalized_prob(m_s: float, g: float, n: int) -> float:
+    exp_g = np.exp(g)
+    return (1 - 1/(exp_g -1)) * np.exp(-g * m_s) + (1/(exp_g - 1)) * np.exp(-g * n)
+
+def calc_hfm_kld_with_marginalized_hfm(emp_states_dict, g):     
+    
+    exp_g = np.exp(g)
+
+    empirical_probs_values = torch.tensor(
+        list(emp_states_dict.values()), dtype=torch.float32
+    )
+    empirical_distribution = torch.distributions.Categorical(empirical_probs_values)
+    empirical_entropy = empirical_distribution.entropy()
+
+    latent_dim = len(next(iter(emp_states_dict)))
+
+    mean_log_p_theoretical = 0
+    for state, p_emp in emp_states_dict.items():
+        m_s = calc_ms(state)  # 1-indexed
+        mean_log_p_theoretical += p_emp * np.log(calc_hfm_marginalized_prob(m_s, g, latent_dim))
+
+    kl_div = empirical_entropy - mean_log_p_theoretical
+
+    return kl_div
+
+
+

@@ -8,12 +8,14 @@ from torch.nn import Module
 from torch.utils.data import DataLoader
 import torch
 
-from AE.utils import calc_hfm_kld
+from AE.utils import calc_hfm_kld, calc_hfm_kld_with_marginalized_hfm
 from AE.utils import compute_emp_states_dict, compute_sampled_emp_states_dict
 from AE.utils import calc_Z_theoretical
 from AE.utils import calc_ms
 
 from AE.models import AE_0
+
+IS_TEST_MODE = False
 
 
 # –––––––––––––––––––––––––––––––––––– EXPORTED TO DEPTH_ANALYSIS –––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––
@@ -66,7 +68,7 @@ def write_encoded_dataset_on_file_sigmoid_output(data_loader, model_kwargs, devi
 
 
 
-def compute_dataset_klds_gs_dict_from_sampled_binarized_vectors_(dataset, data_loader, model_kwargs, device, model_path_kwargs, num_hidden_layers_range, dataset_klds_dict = None, dataset_gs_dict = None):
+def compute_dataset_klds_gs_dict_from_sampled_binarized_vectors_(dataset, data_loader, model_kwargs, device, model_path_kwargs, num_hidden_layers_range, hfm_distribution = 'pure', dataset_klds_dict = None, dataset_gs_dict = None):
     """
     Computes and stores the Kullback-Leibler divergences (KLDs) and optimal 'g' values for a given dataset
     using autoencoder models with varying numbers of hidden layers.
@@ -104,6 +106,9 @@ def compute_dataset_klds_gs_dict_from_sampled_binarized_vectors_(dataset, data_l
 
     for num_hidden_layers in num_hidden_layers_range:
 
+        if IS_TEST_MODE:
+            print(f"{num_hidden_layers} hidden layers...")
+
         model = AE_0(
             **model_kwargs,
             hidden_layers=num_hidden_layers
@@ -114,7 +119,7 @@ def compute_dataset_klds_gs_dict_from_sampled_binarized_vectors_(dataset, data_l
 
         model.eval()
 
-        kld, g = calc_hfm_kld_with_optimal_g(model, data_loader, return_g=True, binarize_threshold=None)
+        kld, g = calc_hfm_kld_with_optimal_g(model, data_loader, return_g=True, binarize_threshold=None, hfm_distribution=hfm_distribution)
 
         dataset_klds_dict[dataset].append(kld)
         dataset_gs_dict[dataset].append(g)
@@ -308,7 +313,6 @@ def compute_klds_gs_lst_with_fixed_threshold(data_loader, model_kwargs, device, 
             - klds_lst (list): List of KLD values for each hidden layer count.
             - gs_lst (list): List of gs values for each hidden layer count.
     """
-    from AE.depth_utils import calc_hfm_kld_with_optimal_g
 
     klds_lst = []
     gs_lst = []
@@ -434,7 +438,8 @@ def calc_hfm_kld_with_optimal_g(            # used in compute_klds_gs_lst_with_f
         model: Module,
         data_loader: DataLoader,
         return_g = False,
-        binarize_threshold = 0.5):   
+        binarize_threshold = 0.5,
+        hfm_distribution = 'pure'):   
     """
     Calculates the KL divergence between the empirical latent state distribution (from the model and data_loader)
     and the HFM model with its optimal parameter g (chosen to best match the empirical mean).
@@ -449,9 +454,26 @@ def calc_hfm_kld_with_optimal_g(            # used in compute_klds_gs_lst_with_f
         float: KL divergence between empirical states and HFM with optimal g.
         float (optional): The optimal g value (if return_g is True).
     """
-    emp_states_dict_gauged = compute_emp_states_dict_gauged(model, data_loader, binarize_threshold=binarize_threshold)
-    optimal_g = calc_optimal_g(emp_states_dict_gauged)
-    kl_div = calc_hfm_kld(emp_states_dict_gauged, optimal_g)
+
+    if IS_TEST_MODE:
+        print(f"Calculating emp_states_dict_gauged")
+    emp_states_dict_gauged = compute_emp_states_dict_gauged(model, data_loader, binarize_threshold=binarize_threshold, hfm_distribution=hfm_distribution)
+
+    if IS_TEST_MODE:
+        print(f"Calculating optimal g and KL divergence")
+    if hfm_distribution == 'pure':
+        optimal_g = calc_optimal_g(emp_states_dict_gauged)
+        kl_div = calc_hfm_kld(emp_states_dict_gauged, optimal_g)
+    elif hfm_distribution == 'marginalized':
+        optimal_g = calc_optimal_g_with_marginalized_hfm(emp_states_dict_gauged)
+        if IS_TEST_MODE:
+            print(f"optimal_g: {optimal_g}")
+            print("Calculating KL divergence with marginalized HFM")
+        kl_div = calc_hfm_kld_with_marginalized_hfm(emp_states_dict_gauged, optimal_g)
+        if IS_TEST_MODE:
+            print(f"kl_div: {kl_div}")
+    else:
+        raise ValueError("hfm_distribution must be either 'pure' or 'marginalized'")
 
     return kl_div, optimal_g if return_g else kl_div
 
@@ -486,6 +508,7 @@ def compute_emp_states_dict_gauged(                 # USED IN calc_hfm_kld_with_
         data_loader: DataLoader,
         binarize_threshold = 0.5,
         flip_gauge = True,
+        hfm_distribution = 'pure',
         brute_force = False,
         return_perm = False,
         verbose = False
@@ -510,6 +533,8 @@ def compute_emp_states_dict_gauged(                 # USED IN calc_hfm_kld_with_
         tuple (optional): The optimal permutation of latent dimensions (if return_perm is True).
     """
     
+    if IS_TEST_MODE:
+        print(f"Computing emp_states_dict")    
     if binarize_threshold is None:
         emp_states_dict = compute_sampled_emp_states_dict(model, data_loader, num_samples=5)
     else:
@@ -521,7 +546,7 @@ def compute_emp_states_dict_gauged(                 # USED IN calc_hfm_kld_with_
     if brute_force:
         gauge_perm = compute_perm_minimizing_hfm_kld_brute_force(emp_states_dict, verbose=verbose)
     else:
-        gauge_perm = compute_perm_minimizing_hfm_kld_simul_anneal(emp_states_dict, verbose=verbose)
+        gauge_perm = compute_perm_minimizing_hfm_kld_simul_anneal(emp_states_dict, hfm_distribution = hfm_distribution, g=0.8, verbose=verbose)
 
     emp_states_dict_gauged = {tuple(k[i] for i in gauge_perm): v for k, v in emp_states_dict.items()}
 
@@ -573,6 +598,8 @@ def calc_optimal_g(                                 # USED IN calc_hfm_kld_with_
 
     # --------------------------------
 
+    if IS_TEST_MODE:
+        plot_graph = True
     if plot_graph:
         plt.plot(gs, ms_average, label="m_s average")
         plt.axhline(ms_mean, color="r", linestyle="--", label="ms_mean")
@@ -590,6 +617,193 @@ def calc_optimal_g(                                 # USED IN calc_hfm_kld_with_
         print(f"Optimal g: {nearest_g}, with expected value: {nearest_value}")
 
     return nearest_g
+
+
+
+
+def calc_optimal_g_with_marginalized_hfm(
+        emp_states_dict_gauged,
+        plot_graph = False,
+        verbose = False
+):
+    """
+    Finds the optimal value of the parameter 'g' for the HFM such that
+    the theoretical mean of the expected value (m_s average) matches the empirical mean (m_s mean)
+    computed from the provided gauged states.
+
+    The function computes the empirical mean of m_s from the gauged states, then searches for the
+    value of 'g' where the gradient of the log partition function (theoretical m_s average) is
+    closest to the empirical mean. Optionally, it can plot the comparison and print verbose output.
+
+    Args:
+        emp_states_dict_gauged (dict): Dictionary mapping state tuples to their empirical probabilities.
+        plot_graph (bool, optional): If True, plots the theoretical m_s average, empirical mean,
+            and the optimal g. Defaults to False.
+        verbose (bool, optional): If True, prints the empirical mean, optimal g, and corresponding
+            theoretical value. Defaults to False.
+
+    Returns:
+        float: The optimal value of g that best matches the empirical m_s mean.
+    """
+
+    ms_mean = calc_ms_mean(emp_states_dict_gauged)              # Empirical value to compare with theoretical ms_average values
+    latent_dim = len(next(iter(emp_states_dict_gauged)))
+
+    gs = np.linspace(np.log(2)+1e-4, 1.8, 1000)                               # g domain to calculate -log(Z(g))
+
+    y = []
+    for g in gs:
+        y.append(calc_hfm_marginalized_log(emp_states_dict_gauged, g))    
+    ms_average = np.gradient(y, gs)                             # Theoretical values for comparison with ms_mean. Numerical gradients of y over g (vector).
+
+    nearest_position = np.argmin(np.abs(ms_average - ms_mean))
+    nearest_g = gs[nearest_position]
+    nearest_value = ms_average[nearest_position]
+
+    # --------------------------------
+    if IS_TEST_MODE:
+        plot_graph = True
+    if plot_graph:
+        plt.plot(gs, ms_average, label="m_s average")
+        plt.axhline(ms_mean, color="r", linestyle="--", label="ms_mean")
+        plt.axvline(
+            nearest_g, color="g", linestyle="--", label=f"optimal g = {nearest_g:.3f}"
+        )
+        plt.legend()
+        plt.xlabel("g")
+        plt.ylabel("Expected Value")
+        plt.title("m_s average vs m_s mean")
+        plt.show()
+
+    if verbose:
+        print(f"m_s mean: {ms_mean}")
+        print(f"Optimal g: {nearest_g}, with expected value: {nearest_value}")
+
+    return nearest_g
+
+
+def calc_hfm_marginalized_log(emp_states_dict_gauged, g):
+
+    n = len(next(iter(emp_states_dict_gauged)))
+    states = list(emp_states_dict_gauged.keys())
+    x = 0
+    for state in states:
+        m_s = calc_ms(state)
+        denom = np.exp(g) - 1
+        x += np.log(1 - 1/denom + (1/denom) * np.exp(-g *(n - m_s)))
+    return x / len(states)
+
+
+# def calc_optimal_g_with_marginalized_hfm(
+#         emp_states_dict_gauged,
+#         plot_graph = False,
+#         verbose = False
+# ):
+#     mean_ms = calc_ms_mean(emp_states_dict_gauged)
+#     gs = np.linspace(0.01, 1.8, 500)
+#     y = []
+
+#     for g in gs:
+#         exp_g = np.exp(g)
+#         denom = exp_g - 1
+#         if np.abs(denom) < 1e-8:  # Avoid division by zero
+#             y.append(np.nan)
+#         else:
+#             y.append(mean_ms * denom + complementary_average_ms(emp_states_dict_gauged, g) +1/denom)
+
+
+#     nearest_position = np.nanargmin(np.abs(y))
+#     nearest_g = gs[nearest_position]
+#     nearest_value = y[nearest_position]
+
+#     if IS_TEST_MODE:
+#         plot_graph = True
+#     if plot_graph:
+#         plt.plot(gs, y, label="Objective Function")
+#         plt.axvline(nearest_g, color="g", linestyle="--", label=f"optimal g = {nearest_g:.3f}")
+#         plt.legend()
+#         plt.xlabel("g")
+#         plt.ylabel("Objective Value")
+#         plt.title("Objective Function vs g")
+#         plt.show()
+
+#     if verbose:
+#         print(f"Optimal g: {nearest_g}, with objective value: {nearest_value}")
+
+#     return nearest_g
+
+
+
+# def calc_optimal_g_with_marginalized_hfm(
+#         emp_states_dict_gauged,
+#         plot_graph = False,
+#         verbose = False
+# ):
+#     mean_ms = calc_ms_mean(emp_states_dict_gauged)
+#     gs = np.linspace(0.01, 1.8, 500)
+#     y = []
+#     mean_ms_denom = []
+#     complementary_avgs = []
+#     inv_denoms = []
+
+#     for g in gs:
+#         exp_g = np.exp(g)
+#         denom = exp_g - 1
+#         if np.abs(denom) < 1e-8:  # Avoid division by zero
+#             y.append(np.nan)
+#             mean_ms_denom.append(np.nan)
+#             complementary_avgs.append(np.nan)
+#             inv_denoms.append(np.nan)
+#         else:
+#             mmd = mean_ms * denom
+#             comp_avg = complementary_average_ms(emp_states_dict_gauged, g)
+#             inv_denom = 1 / denom
+#             mean_ms_denom.append(mmd)
+#             complementary_avgs.append(comp_avg)
+#             inv_denoms.append(inv_denom)
+#             y.append(mmd + comp_avg + inv_denom)
+
+#     nearest_position = np.nanargmin(np.abs(y))
+#     nearest_g = gs[nearest_position]
+#     nearest_value = y[nearest_position]
+
+#     if IS_TEST_MODE:
+#         plot_graph = True
+#     if plot_graph:
+#         plt.plot(gs, y, label="Objective Function")
+#         plt.plot(gs, mean_ms_denom, label="mean_ms * denom")
+#         plt.plot(gs, complementary_avgs, label="complementary_average_ms")
+#         plt.plot(gs, inv_denoms, label="1/denom")
+#         plt.axvline(nearest_g, color="g", linestyle="--", label=f"optimal g = {nearest_g:.3f}")
+#         plt.legend()
+#         plt.xlabel("g")
+#         plt.ylabel("Objective Value / Components")
+#         plt.title("Objective Function and Components vs g")
+#         plt.show()
+
+#     if verbose:
+#         print(f"Optimal g: {nearest_g}, with objective value: {nearest_value}")
+
+#     return nearest_g
+
+
+
+def complementary_average_ms(emp_states_dict_gauged, g):
+    
+    n = len(next(iter(emp_states_dict_gauged)))
+    states = list(emp_states_dict_gauged.keys())
+
+    x = 0
+    for state in states:
+        m_s = calc_ms(states)
+        x += (n - m_s - 1) * np.exp(-g * (n - m_s))
+
+    return x / len(states)
+
+
+
+
+
 
 
 
@@ -685,6 +899,7 @@ def compute_perm_minimizing_hfm_kld_simul_anneal(
     initial_temp = 10.0,
     cooling_rate = 0.95,
     n_iterations = 5000,
+    hfm_distribution = 'pure',
     return_perm = False,
     verbose = False
 ):
@@ -708,7 +923,10 @@ def compute_perm_minimizing_hfm_kld_simul_anneal(
 
     current_perm = list(range(state_len))                   # Identity permutation
     current_states_dict = emp_states_dict
-    current_kl = calc_hfm_kld(current_states_dict, g=g)
+    if hfm_distribution == 'pure':
+        current_kl = calc_hfm_kld(current_states_dict, g=g)
+    elif hfm_distribution == 'marginalized':
+        current_kl = calc_hfm_kld_with_marginalized_hfm(current_states_dict, g=g)
 
     best_perm = current_perm                                # No need to .copy() because the variable is not modified
     best_kl = current_kl
@@ -725,7 +943,10 @@ def compute_perm_minimizing_hfm_kld_simul_anneal(
         )   
 
         permuted_states_dict = {tuple(k[i] for i in candidate_perm): v for k, v in emp_states_dict.items()}
-        candidate_kl = calc_hfm_kld(permuted_states_dict, g=g)
+        if hfm_distribution == 'pure':
+            candidate_kl = calc_hfm_kld(permuted_states_dict, g=g)
+        elif hfm_distribution == 'marginalized':
+            candidate_kl = calc_hfm_kld_with_marginalized_hfm(permuted_states_dict, g=g)
 
         delta_kl = candidate_kl - current_kl
         if delta_kl < 0 or random.random() < math.exp(-delta_kl / temp):

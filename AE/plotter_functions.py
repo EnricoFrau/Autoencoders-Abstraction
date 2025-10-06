@@ -296,13 +296,13 @@ def plot_KLs_vs_hidden_layers(
     plt.show()
 
 
-def datasets_dicts_comparison(KLs_dict, save_dir = None):                                            # EXPORTED TO DEPTH_ANALYSIS
+def datasets_dicts_comparison(klds_dict, save_dir = None):                                            # EXPORTED TO DEPTH_ANALYSIS
     """
-    Plots KL values for each dataset in KLs_dict on the same graph.
+    Plots KL values for each dataset in klds_dict on the same graph.
     X-axis: number of hidden layers (1, 2, 3, ...)
     """
     plt.figure(figsize=(8, 5))
-    for key, values in KLs_dict.items():
+    for key, values in klds_dict.items():
         x = list(range(1, len(values) + 1))
         plt.plot(x, values, marker='o', label=key)
     plt.xlabel("Number of hidden layers")
@@ -315,6 +315,93 @@ def datasets_dicts_comparison(KLs_dict, save_dir = None):                       
     
     plt.show()
 
+
+# def datasets_dicts_comparison_colored(
+#     klds_dict, gs_dict, save_dir=None
+# ):
+#     """
+#     Plots KL values for each dataset in klds_dict on the same graph.
+#     Uses gs_dict for coloring the points.
+#     Each key is distinguished by marker style.
+#     """
+#     import itertools
+
+#     plt.figure(figsize=(8, 5))
+#     markers = ['o', 's', 'D', '^', 'v', 'P', '*', 'X', '<', '>']
+#     marker_cycle = itertools.cycle(markers)
+
+#     for key in klds_dict.keys():
+#         values_1 = klds_dict[key]
+#         values_2 = gs_dict[key]
+#         x = list(range(1, len(values_1) + 1))
+#         marker = next(marker_cycle)
+#         # Use values_2 for color mapping
+#         scatter = plt.scatter(
+#             x, values_1, c=values_2, cmap='viridis', s=100, marker=marker, label=key
+#         )
+#         plt.plot(x, values_1, linestyle='--', color=scatter.get_facecolor()[0])
+
+#     plt.xlabel("Number of hidden layers")
+#     plt.ylabel("KL value")
+#     plt.title("KLs vs Number of Hidden Layers (colored by second dict)")
+#     plt.legend()
+#     plt.grid(True)
+#     plt.colorbar(scatter, label="gs")
+
+#     save_fig(save_dir, "comparison.png")
+#     plt.show()
+
+
+
+def datasets_dicts_comparison_colored(
+    klds_dict, gs_dict, save_dir=None, title=None
+):
+    """
+    Plots KL values for each dataset in klds_dict on the same graph.
+    Uses gs_dict for coloring the points and the line.
+    Each key is distinguished by marker style (empty marker).
+    Line color varies continuously along the plot according to gs_dict.
+    """
+    import itertools
+    from matplotlib.collections import LineCollection
+    import matplotlib as mpl
+
+    plt.figure(figsize=(8, 5))
+    markers = ['o', 's', 'D', '^', 'v', 'P', '*', 'X', '<', '>']
+    marker_cycle = itertools.cycle(markers)
+    cmap = plt.get_cmap('inferno')
+
+    for key in klds_dict.keys():
+        values_1 = np.array(klds_dict[key])
+        values_2 = np.array(gs_dict[key])
+        x = np.arange(1, len(values_1) + 1)
+        marker = next(marker_cycle)
+
+        # Scatter with empty markers
+        scatter = plt.scatter(
+            x, values_1, c=values_2, cmap=cmap, s=50, marker=marker,
+            edgecolors='black', facecolors='white', label=key, linewidths=0.5
+        )
+
+        # Line color varies along gs_dict
+        points = np.array([x, values_1]).T.reshape(-1, 1, 2)
+        segments = np.concatenate([points[:-1], points[1:]], axis=1)
+        norm = mpl.colors.Normalize(vmin=values_2.min(), vmax=values_2.max())
+        lc = LineCollection(segments, cmap=cmap, norm=norm)
+        lc.set_array(values_2[:-1])
+        lc.set_linewidth(0.8)
+        lc.set_linestyle("--")
+        plt.gca().add_collection(lc)
+
+    plt.xlabel("Number of hidden layers")
+    plt.ylabel("KLd")
+    plt.title(title)
+    plt.legend()
+    plt.grid(True)
+    plt.colorbar(scatter, label="gs", cmap=cmap)
+
+    save_fig(save_dir, "comparison.png")
+    plt.show()
 
 
 
