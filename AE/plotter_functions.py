@@ -229,7 +229,7 @@ def plot_expected_kl_vs_g(gauged_states, g_range=np.linspace(0.1, 5.0, 50)):
 
 
 
-def visualize_bottleneck_neurons(model, device, img_shape=(28, 28), save_dir = None, file_name=None):
+def visualize_bottleneck_neurons(model, device, img_shape=(28, 28), save_dir = None, file_name=None, EMNIST=False):
     """
     Visualize what each feature in the bottleneck represents by decoding one-hot vectors.
     
@@ -250,6 +250,9 @@ def visualize_bottleneck_neurons(model, device, img_shape=(28, 28), save_dir = N
             one_hot[0, i] = 1.0
             decoded = model.decode(one_hot).cpu().view(*img_shape)
             ax = axes[i]
+            if EMNIST == True:
+                decoded = np.rot90(decoded, k=1)
+                decoded = np.flipud(decoded)  # Flip upside down (mirror vertically)
             ax.imshow(decoded, cmap='gray')
             ax.set_title(f'Neuron {i+1}')
             ax.axis('off')
@@ -260,6 +263,40 @@ def visualize_bottleneck_neurons(model, device, img_shape=(28, 28), save_dir = N
 
         save_fig(save_dir, file_name)
 
+        plt.show()
+
+
+def visualize_decoded_from_latent_vectors(model, latent_vectors, device, img_shape=(28, 28), save_dir=None, file_name=None, cmap='gray'):
+    """
+    Decodes and plots images from given latent vectors.
+
+    Args:
+        model: Trained autoencoder model with a .decode() method.
+        latent_vectors: torch.Tensor of shape [latent_dim] or [N, latent_dim].
+        device: Device to run computations on.
+        img_shape: Shape to reshape the decoded output (default: (28, 28)).
+        save_dir: Directory to save the figure (optional).
+        file_name: Name of the file to save (optional).
+        cmap: Colormap for imshow (default: 'gray').
+    """
+    model.eval()
+    with torch.no_grad():
+        latent_vectors = latent_vectors.to(device)
+        if latent_vectors.dim() == 1:
+            latent_vectors = latent_vectors.unsqueeze(0)
+        decoded_imgs = model.decode(latent_vectors).cpu().view(-1, *img_shape)
+
+        n_imgs = decoded_imgs.shape[0]
+        fig, axes = plt.subplots(1, n_imgs, figsize=(3 * n_imgs, 3))
+        if n_imgs == 1:
+            axes = [axes]
+        for i, ax in enumerate(axes):
+            ax.imshow(decoded_imgs[i], cmap=cmap)
+            ax.set_title(f"Decoded {i+1}")
+            ax.axis('off')
+        plt.tight_layout()
+
+        save_fig(save_dir, file_name)
         plt.show()
 
 
