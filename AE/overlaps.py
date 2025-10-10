@@ -97,10 +97,6 @@ def load_model(model_path_kwargs, model_kwargs):
 
 
 
-
-
-
-
 def compute_min_distances_frequencies(model_path_kwargs, model_kwargs, datapoints_array, labels_array):
     decoded_binary_matrix = compute_decoded_binary_matrix(model_path_kwargs, model_kwargs)
     closest_rows_indices = compute_closest_rows(decoded_binary_matrix, datapoints_array)
@@ -187,11 +183,11 @@ def find_closest_row(vector, matrix):
 
 
 
-def get_datapoints_labels_arrays(dataset_name):
+def get_datapoints_labels_arrays(dataset_name, train=True):
     if dataset_name == 'MNIST':
         dataset = datasets.MNIST(
             '/Users/enricofrausin/Programmazione/PythonProjects/Fisica/data',
-            train=False,
+            train=train,
             download=True,
             transform=transforms.ToTensor()
             )
@@ -199,16 +195,16 @@ def get_datapoints_labels_arrays(dataset_name):
         dataset = datasets.EMNIST(
             '/Users/enricofrausin/Programmazione/PythonProjects/Fisica/data',
             split='balanced',
-            train=True,
+            train=train,
             download=True,
             transform=transforms.ToTensor()
             )
     elif dataset_name == '2MNISTonly':
-        dataset = MNISTDigit2OnlyDataset(train=True, download=True)
+        dataset = MNISTDigit2OnlyDataset(train=train, download=True)
     elif dataset_name == '2MNIST':
-        dataset = MNISTDigit2Dataset(train=True, download=True, target_size=60000)
+        dataset = MNISTDigit2Dataset(train=train, download=True, target_size=60000)
     elif dataset_name == 'FEMNIST':
-        dataset = FEMNISTDataset(train=True, download=True)
+        dataset = FEMNISTDataset(train=train, download=True)
     else:
         raise ValueError(f"Unknown dataset name: {dataset_name}")
 
@@ -226,3 +222,187 @@ def get_datapoints_labels_arrays(dataset_name):
     datapoints_array = datapoints_array[sorting_permutation]
 
     return datapoints_array, labels_array
+
+
+
+
+def plot_labels_frequencies_histogram(labels_frequencies, first_indices=None, title=None, cmap_name='inferno', ax=None):
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    if ax is None:
+        ax = plt.gca()
+
+    n = len(labels_frequencies)
+    cmap = plt.get_cmap(cmap_name)
+
+    if first_indices is not None:
+        indices = [int(x) for x in first_indices]
+        indices.append(n)
+        num_segments = len(indices) - 1
+        colors = [cmap(i / max(num_segments - 1, 1)) for i in range(num_segments)]
+        for i in range(num_segments):
+            start = indices[i]
+            end = indices[i+1]
+            ax.bar(range(start, end), labels_frequencies[start:end], width=1.5, color=colors[i], label=f'Label {i}')
+        ax.legend()
+    else:
+        ax.bar(range(n), labels_frequencies, color = cmap(0.5))
+
+    ax.set_xlabel('Label')
+    ax.set_ylabel('Frequency')
+    ax.set_xticks([])
+    if title is not None:
+        ax.set_title(title)
+
+
+
+def find_first_occurrences(labels_array):
+    """
+    Returns a dictionary mapping each unique label to the index of its first occurrence in labels_array.
+    """
+    first_indices = {}
+    unique_labels = np.unique(labels_array)
+    for label in unique_labels:
+        first_indices[label] = np.where(labels_array == label)[0][0]
+    return first_indices
+
+
+
+def plot_unique_frequencies_histogram(unique_frequencies, unique_counts, title="Unique Frequencies Histogram", n_bins=None):
+    import matplotlib.pyplot as plt
+    plt.figure(figsize=(8, 5))
+    if n_bins is not None:
+        unique_frequencies = unique_frequencies[:n_bins]
+        unique_counts = unique_counts[:n_bins]
+    plt.bar(unique_frequencies, unique_counts, width=0.008, color='tab:blue', edgecolor='black')
+    plt.xlabel('Frequency')
+    plt.ylabel('Count')
+    plt.yscale('log')
+    plt.title(title)
+    plt.show()
+
+
+
+
+
+# ----------------------------------------------------------------------------
+
+
+
+def plot_multiple_labels_frequencies_histograms(labels_frequencies_matrix, first_indices=None, title=None, cmap_name='inferno', ax=None):
+    """
+    Plots multiple label frequency histograms vertically stacked.
+
+    Args:
+        labels_frequencies_matrix (np.ndarray): Array of shape (k, n_labels).
+        first_indices (list or list of lists, optional): Indices for segment coloring, either shared or per realization.
+        title (str, optional): Plot title.
+        cmap_name (str, optional): Matplotlib colormap name.
+        ax (matplotlib.axes.Axes, optional): Axis to plot on.
+    """
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    k, n = labels_frequencies_matrix.shape
+    cmap = plt.get_cmap(cmap_name)
+
+    if ax is None:
+        fig, axes = plt.subplots(k, 1, figsize=(8, 2*k), sharex=True)
+    else:
+        axes = [ax] * k
+
+    for idx in range(k):
+        ax_i = axes[idx]
+        freqs = labels_frequencies_matrix[idx]
+        # Handle first_indices per realization
+        if first_indices is not None:
+            if isinstance(first_indices[0], (list, np.ndarray)):
+                indices = [int(x) for x in first_indices[idx]]
+            else:
+                indices = [int(x) for x in first_indices]
+            indices.append(n)
+            num_segments = len(indices) - 1
+            colors = [cmap(i / max(num_segments - 1, 1)) for i in range(num_segments)]
+            for i in range(num_segments):
+                start = indices[i]
+                end = indices[i+1]
+                ax_i.bar(range(start, end), freqs[start:end], width=1.5, color=colors[i], label=f'Label {i}' if idx == 0 else None)
+            if idx == 0:
+                ax_i.legend()
+        else:
+            ax_i.bar(range(n), freqs, color=cmap(0.5))
+        ax_i.set_ylabel(f'k={idx}')
+        ax_i.set_xticks([])
+
+    axes[-1].set_xlabel('Label')
+    if title is not None:
+        axes[0].set_title(title)
+    plt.tight_layout()
+
+
+
+# def plot_multiple_unique_frequencies_histograms(unique_frequencies_matrix, unique_counts_matrix, title="Unique Frequencies Histogram", n_bins=None):
+#     """
+#     Plots multiple unique frequencies histograms vertically stacked.
+
+#     Args:
+#         unique_frequencies_matrix (np.ndarray): Array of shape (k, n_bins).
+#         unique_counts_matrix (np.ndarray): Array of shape (k, n_bins).
+#         title (str, optional): Plot title.
+#         n_bins (int or list, optional): Number of bins to plot, shared or per realization.
+#     """
+#     import matplotlib.pyplot as plt
+#     k = unique_frequencies_matrix.shape[0]
+#     fig, axes = plt.subplots(k, 1, figsize=(8, 2*k), sharex=True)
+#     if not isinstance(axes, np.ndarray):
+#         axes = [axes]
+#     for idx in range(k):
+#         freqs = unique_frequencies_matrix[idx]
+#         counts = unique_counts_matrix[idx]
+#         bins = n_bins[idx] if isinstance(n_bins, (list, np.ndarray)) else n_bins
+#         if bins is not None:
+#             freqs = freqs[:bins]
+#             counts = counts[:bins]
+#         axes[idx].bar(freqs, counts, width=0.008, color='tab:blue', edgecolor='black')
+#         axes[idx].set_ylabel(f'k={idx}')
+#         axes[idx].set_yscale('log')
+#         axes[idx].set_xticks([])
+#     axes[-1].set_xlabel('Frequency')
+#     if title is not None:
+#         axes[0].set_title(title)
+#     plt.tight_layout()
+
+
+
+def plot_multiple_unique_frequencies_histograms(unique_frequencies_list, unique_counts_list, title="Unique Frequencies Histogram", n_bins=None):
+    """
+    Plots multiple unique frequencies histograms vertically stacked.
+
+    Args:
+        unique_frequencies_list (list of np.ndarray): Unique frequencies per realization/layer.
+        unique_counts_list (list of np.ndarray): Counts per realization/layer.
+        title (str, optional): Plot title.
+        n_bins (int or list, optional): Number of bins to plot, shared or per realization.
+    """
+    import matplotlib.pyplot as plt
+
+    k = len(unique_frequencies_list)
+    fig, axes = plt.subplots(k, 1, figsize=(8, 2*k), sharex=True)
+    if k == 1:
+        axes = [axes]
+    for idx in range(k):
+        freqs = unique_frequencies_list[idx]
+        counts = unique_counts_list[idx]
+        bins = n_bins[idx] if isinstance(n_bins, (list, tuple)) else n_bins
+        if bins is not None:
+            freqs = freqs[:bins]
+            counts = counts[:bins]
+        axes[idx].bar(freqs, counts, width=0.008, color='tab:blue', edgecolor='black')
+        axes[idx].set_ylabel(f'k={idx}')
+        axes[idx].set_yscale('log')
+        axes[idx].set_xticks([])
+    axes[-1].set_xlabel('Frequency')
+    if title is not None:
+        axes[0].set_title(title)
+    plt.tight_layout()
