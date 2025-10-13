@@ -290,55 +290,145 @@ def plot_unique_frequencies_histogram(unique_frequencies, unique_counts, title="
 
 
 
-def plot_multiple_labels_frequencies_histograms(labels_frequencies_matrix, first_indices=None, title=None, cmap_name='inferno', ax=None):
+# def plot_multiple_labels_frequencies_histograms(labels_frequencies_matrix, first_indices=None, title=None, cmap_name='inferno', ax=None):
+#     """
+#     Plots multiple label frequency histograms vertically stacked.
+
+#     Args:
+#         labels_frequencies_matrix (np.ndarray): Array of shape (k, n_labels).
+#         first_indices (list or list of lists, optional): Indices for segment coloring, either shared or per realization.
+#         title (str, optional): Plot title.
+#         cmap_name (str, optional): Matplotlib colormap name.
+#         ax (matplotlib.axes.Axes, optional): Axis to plot on.
+#     """
+#     import matplotlib.pyplot as plt
+#     import numpy as np
+
+#     k, n = labels_frequencies_matrix.shape
+#     cmap = plt.get_cmap(cmap_name)
+
+#     if ax is None:
+#         fig, axes = plt.subplots(k, 1, figsize=(8, 2*k), sharex=True)
+#     else:
+#         axes = [ax] * k
+
+#     for idx in range(k):
+#         ax_i = axes[idx]
+#         freqs = labels_frequencies_matrix[idx]
+#         # Handle first_indices per realization
+#         if first_indices is not None:
+#             if isinstance(first_indices[0], (list, np.ndarray)):
+#                 indices = [int(x) for x in first_indices[idx]]
+#             else:
+#                 indices = [int(x) for x in first_indices]
+#             indices.append(n)
+#             num_segments = len(indices) - 1
+#             colors = [cmap(i / max(num_segments - 1, 1)) for i in range(num_segments)]
+#             for i in range(num_segments):
+#                 start = indices[i]
+#                 end = indices[i+1]
+#                 ax_i.bar(range(start, end), freqs[start:end], width=1.5, color=colors[i], label=f'Label {i}' if idx == 0 else None)
+#             if idx == 0:
+#                 ax_i.legend()
+#         else:
+#             ax_i.bar(range(n), freqs, color=cmap(0.5))
+#         ax_i.set_ylabel(f'k={idx+1}')
+#         ax_i.set_xticks([])
+
+#     axes[-1].set_xlabel('Label')
+#     if title is not None:
+#         axes[0].set_title(title)
+#     plt.tight_layout()
+
+
+
+
+    # ...existing code...
+
+def plot_multiple_labels_frequencies_histograms(labels_frequencies_list, labels_list=None, dataset_name=None, cmap_name='inferno', title=None):
     """
     Plots multiple label frequency histograms vertically stacked.
+    Accepts a list of arrays (possibly with different lengths).
 
     Args:
-        labels_frequencies_matrix (np.ndarray): Array of shape (k, n_labels).
-        first_indices (list or list of lists, optional): Indices for segment coloring, either shared or per realization.
-        title (str, optional): Plot title.
+        labels_frequencies_list (list of np.ndarray): List of frequency arrays per hidden layer.
+        labels_list (list of np.ndarray, optional): List of label arrays per hidden layer (for coloring).
+        dataset_name (str, optional): Dataset name for title.
         cmap_name (str, optional): Matplotlib colormap name.
-        ax (matplotlib.axes.Axes, optional): Axis to plot on.
+        title (str, optional): Plot title.
     """
     import matplotlib.pyplot as plt
     import numpy as np
 
-    k, n = labels_frequencies_matrix.shape
+    k = len(labels_frequencies_list)
+    fig, axes = plt.subplots(k, 1, figsize=(8, 2*k), sharex=False)
+    if k == 1:
+        axes = [axes]
     cmap = plt.get_cmap(cmap_name)
 
-    if ax is None:
-        fig, axes = plt.subplots(k, 1, figsize=(8, 2*k), sharex=True)
-    else:
-        axes = [ax] * k
-
     for idx in range(k):
-        ax_i = axes[idx]
-        freqs = labels_frequencies_matrix[idx]
-        # Handle first_indices per realization
-        if first_indices is not None:
-            if isinstance(first_indices[0], (list, np.ndarray)):
-                indices = [int(x) for x in first_indices[idx]]
-            else:
-                indices = [int(x) for x in first_indices]
-            indices.append(n)
-            num_segments = len(indices) - 1
+        ax = axes[idx]
+        freqs = labels_frequencies_list[idx]
+        n = len(freqs)
+        if labels_list is not None:
+            labels = labels_list[idx]
+            first_indices = list(find_first_occurrences(labels).values())
+            first_indices.append(n)
+            num_segments = len(first_indices) - 1
             colors = [cmap(i / max(num_segments - 1, 1)) for i in range(num_segments)]
             for i in range(num_segments):
-                start = indices[i]
-                end = indices[i+1]
-                ax_i.bar(range(start, end), freqs[start:end], width=1.5, color=colors[i], label=f'Label {i}' if idx == 0 else None)
-            if idx == 0:
-                ax_i.legend()
+                start = first_indices[i]
+                end = first_indices[i+1]
+                ax.bar(range(start, end), freqs[start:end], width=1.5, color=colors[i], label=f'Label {i}' if idx == 0 else None)
+                axes[-1].set_xlabel('Datapoint')
         else:
-            ax_i.bar(range(n), freqs, color=cmap(0.5))
-        ax_i.set_ylabel(f'k={idx}')
-        ax_i.set_xticks([])
+            ax.bar(range(n), freqs, color=cmap(0.5), width=0.5)
+            axes[-1].set_xlabel('Label')
+        ax.set_ylabel(f'{idx+1} hl')
+        ax.set_xticks([])
 
-    axes[-1].set_xlabel('Label')
+
     if title is not None:
         axes[0].set_title(title)
+    elif dataset_name is not None:
+        axes[0].set_title(f"{dataset_name}")
     plt.tight_layout()
+
+
+
+def plot_multiple_labels_frequencies_lines(labels_frequencies_list, dataset_name=None, cmap_name='tab10', title=None):
+    """
+    Plots multiple label frequency arrays as line plots in the same figure.
+
+    Args:
+        labels_frequencies_list (list of np.ndarray): List of frequency arrays per hidden layer.
+        dataset_name (str, optional): Dataset name for title.
+        cmap_name (str, optional): Matplotlib colormap name.
+        title (str, optional): Plot title.
+    """
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    k = len(labels_frequencies_list)
+    cmap = plt.get_cmap(cmap_name)
+    plt.figure(figsize=(10, 6))
+
+    for idx, freqs in enumerate(labels_frequencies_list):
+        x = np.arange(len(freqs))
+        plt.plot(x, freqs, label=f'{idx+1} hl', color=cmap(idx % cmap.N))
+
+    plt.xlabel('Label')
+    plt.ylabel('Counts')
+    if title is not None:
+        plt.title(title)
+    elif dataset_name is not None:
+        plt.title(f"{dataset_name}")
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+
+
+# ...existing code...
 
 
 
@@ -392,6 +482,7 @@ def plot_multiple_unique_frequencies_histograms(unique_frequencies_list, unique_
     if k == 1:
         axes = [axes]
     for idx in range(k):
+
         freqs = unique_frequencies_list[idx]
         counts = unique_counts_list[idx]
         bins = n_bins[idx] if isinstance(n_bins, (list, tuple)) else n_bins
@@ -399,10 +490,169 @@ def plot_multiple_unique_frequencies_histograms(unique_frequencies_list, unique_
             freqs = freqs[:bins]
             counts = counts[:bins]
         axes[idx].bar(freqs, counts, width=0.008, color='tab:blue', edgecolor='black')
-        axes[idx].set_ylabel(f'k={idx}')
+        axes[idx].set_ylabel(f'{idx+1} hl')
         axes[idx].set_yscale('log')
-        axes[idx].set_xticks([])
+        if idx == k-1:
+            axes[idx].set_xticks(freqs)
+        else:
+            axes[idx].set_xticks([])
     axes[-1].set_xlabel('Frequency')
     if title is not None:
         axes[0].set_title(title)
     plt.tight_layout()
+
+
+
+
+def plot_multiple_unique_frequencies_lines(unique_frequencies_list, unique_counts_list, title=None, n_bins=None, cmap_name='tab10'):
+    """
+    Plots multiple unique frequencies/counts arrays as line plots in the same figure.
+
+    Args:
+        unique_frequencies_list (list of np.ndarray): Unique frequencies per realization/layer.
+        unique_counts_list (list of np.ndarray): Counts per realization/layer.
+        title (str, optional): Plot title.
+        n_bins (int or list, optional): Number of bins to plot, shared or per realization.
+        cmap_name (str, optional): Matplotlib colormap name.
+    """
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    k = len(unique_frequencies_list)
+    cmap = plt.get_cmap(cmap_name)
+    plt.figure(figsize=(10, 6))
+
+    for idx in range(k):
+        freqs = unique_frequencies_list[idx]
+        counts = unique_counts_list[idx]
+        bins = n_bins[idx] if isinstance(n_bins, (list, tuple)) else n_bins
+        if bins is not None:
+            freqs = freqs[:bins]
+            counts = counts[:bins]
+        plt.plot(freqs, counts, label=f'{idx+1} hl', color=cmap(idx % cmap.N))
+
+    plt.xlabel('Frequency')
+    plt.ylabel('Count')
+    plt.yscale('log')
+    if title is not None:
+        plt.title(title)
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+
+
+
+# ----------------------------------------------------------------------------
+
+
+def compute_datapoints_labels_freq_list(dataset, ld, datapoints_array, labels_array, save_dir=None):
+
+    model_kwargs = {
+        'input_dim': 28*28,
+        'latent_dim': ld,
+        'decrease_rate': 0.6,
+        'device': device,
+        'output_activation_encoder': nn.Sigmoid
+    }
+    model_path_kwargs = {
+        'output_activation_encoder': 'sigmoid output',
+        'train_type': 'simultaneous train',
+        'latent_dim': f"{model_kwargs['latent_dim']}ld",
+        'decrease_rate': '06',
+        'learning_rate': '1e3',
+        'train_num': 0,
+    }
+    model_path_kwargs['dataset'] = dataset
+
+
+    repetitions = range(6)
+    hidden_layers = range(1, 8)
+
+    datapoints_freq_list = []
+    labels_freq_list = []
+
+    for repetition in repetitions:
+        datapoints_freq_hl = []
+        labels_freq_hl = []
+
+        for num_hidden_layers in hidden_layers:
+            model_kwargs['hidden_layers'] = num_hidden_layers
+            model_path_kwargs['num_hidden_layers'] = num_hidden_layers
+
+            datapoints_frequencies, labels_frequencies = compute_min_distances_frequencies(
+                model_path_kwargs, model_kwargs, datapoints_array, labels_array
+            )
+
+            datapoints_freq_hl.append(datapoints_frequencies)
+            labels_freq_hl.append(labels_frequencies)
+            
+        datapoints_freq_list.append(datapoints_freq_hl)
+        labels_freq_list.append(labels_freq_hl)
+
+    repetitions_hl_datapoints_freq_array = np.array(datapoints_freq_list)
+    repetitions_hl_labels_freq_array = np.array(labels_freq_list)
+
+    if save_dir is not None:
+        with open(f"{save_dir}/datapoints_freq_list_{dataset}_{ld}ld.pkl", "wb") as f:
+            pickle.dump(repetitions_hl_datapoints_freq_array, f)
+        with open(f"{save_dir}/labels_freq_list_{dataset}_{ld}ld.pkl", "wb") as f:
+            pickle.dump(repetitions_hl_labels_freq_array, f)
+
+    return repetitions_hl_datapoints_freq_array, repetitions_hl_labels_freq_array
+
+
+
+def extract_unique_freq_counts_per_hidden_layer(hl_datapoints_freq):
+    """
+    For each hidden layer, extracts nonzero datapoint frequencies, corresponding labels,
+    and computes unique frequencies and their counts.
+
+    Args:
+        hl_datapoints_freq (np.ndarray): Array of shape (n_hidden_layers, n_datapoints).
+        labels_array (np.ndarray): Array of shape (n_datapoints,).
+
+    Returns:
+        hl_unique_frequencies (list of np.ndarray): Unique frequencies per hidden layer.
+        hl_unique_counts (list of np.ndarray): Counts of unique frequencies per hidden layer.
+    """
+
+    hl_unique_frequencies = []
+    hl_unique_counts = []
+
+    for hl in range(hl_datapoints_freq.shape[0]):
+        
+        current_hl_nonzero_datapoints_freq = hl_datapoints_freq[hl][hl_datapoints_freq[hl] != 0]
+        current_unique_frequencies, current_unique_counts = np.unique(current_hl_nonzero_datapoints_freq, return_counts=True)
+        
+        hl_unique_frequencies.append(current_unique_frequencies)
+        hl_unique_counts.append(current_unique_counts)
+
+    return hl_unique_frequencies, hl_unique_counts
+
+
+
+def extract_nonzero_freq_per_hidden_layer(hl_datapoints_freq, labels_array):
+    """
+    For each hidden layer, extracts nonzero datapoint frequencies, corresponding labels,
+    and computes unique frequencies and their counts.
+
+    Args:
+        hl_datapoints_freq (np.ndarray): Array of shape (n_hidden_layers, n_datapoints).
+        labels_array (np.ndarray): Array of shape (n_datapoints,).
+
+    Returns:
+        hl_nonzero_datapoints_frequencies (list of np.ndarray): Nonzero frequencies per hidden layer.
+        hl_nonzero_labels (list of np.ndarray): Corresponding labels per hidden layer.
+    """
+    hl_nonzero_datapoints_frequencies = []
+    hl_nonzero_labels = []
+
+    for hl in range(hl_datapoints_freq.shape[0]):
+        current_hl_nonzero_datapoints_freq = hl_datapoints_freq[hl][hl_datapoints_freq[hl] != 0]
+        current_hl_nonzero_labels = labels_array[hl_datapoints_freq[hl] != 0]
+
+        hl_nonzero_datapoints_frequencies.append(current_hl_nonzero_datapoints_freq)
+        hl_nonzero_labels.append(current_hl_nonzero_labels)
+
+
+    return hl_nonzero_datapoints_frequencies, hl_nonzero_labels
