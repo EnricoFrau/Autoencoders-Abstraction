@@ -1,5 +1,7 @@
 import numpy as np
+import pickle
 import torch
+import torch.nn as nn
 from AE.models import AE_0
 from torchvision import datasets, transforms
 from AE.datasets import MNISTDigit2OnlyDataset, MNISTDigit2Dataset, FEMNISTDataset
@@ -97,13 +99,61 @@ def load_model(model_path_kwargs, model_kwargs):
 
 
 
-def compute_min_distances_frequencies(model_path_kwargs, model_kwargs, datapoints_array, labels_array):
+def compute_min_distances_frequencies(model_path_kwargs, model_kwargs, datapoints_array, labels_array, return_distances=False):
+    """
+    Computes the frequency with which each datapoint and label is the closest to a decoded binary latent vector.
+
+    Loads the model specified by model_path_kwargs and model_kwargs, decodes all possible binary latent vectors,
+    finds the closest datapoint in datapoints_array for each decoded vector, and counts how often each datapoint
+    and label is selected as the closest. Optionally returns the minimum distances.
+
+    Args:
+        model_path_kwargs (dict): Dictionary of model path parameters.
+        model_kwargs (dict): Dictionary of model initialization parameters.
+        datapoints_array (np.ndarray): Array of shape (n_datapoints, input_dim), containing datapoints.
+        labels_array (np.ndarray): Array of shape (n_datapoints,), containing labels for each datapoint.
+        return_distances (bool, optional): If True, also returns the array of minimum distances.
+
+    Returns:
+        tuple:
+            - np.ndarray: Array of shape (n_datapoints,) with frequencies for each datapoint.
+            - np.ndarray: Array of shape (n_labels,) with frequencies for each label.
+            - np.ndarray (optional): Array of shape (2**latent_dim,) with minimum distances for each decoded vector.
+    """
     decoded_binary_matrix = compute_decoded_binary_matrix(model_path_kwargs, model_kwargs)
     closest_rows_indices = compute_closest_rows(decoded_binary_matrix, datapoints_array)
+
+    if return_distances:
+        distances = np.linalg.norm(decoded_binary_matrix - datapoints_array[closest_rows_indices], axis=1)
+
     datapoints_frequencies = compute_min_dist_datapoints_frequencies(closest_rows_indices, dataset_length=datapoints_array.shape[0])
     labels_frequencies = compute_min_dist_labels_frequencies(closest_rows_indices, labels_array)
-    return datapoints_frequencies, labels_frequencies
 
+    if return_distances:
+        return datapoints_frequencies, labels_frequencies, distances
+    else:
+        return datapoints_frequencies, labels_frequencies
+
+
+def compute_min_distances(model_path_kwargs, model_kwargs, datapoints_array):
+    """
+    Computes the minimum Euclidean distances between each decoded binary latent vector and its closest datapoint.
+
+    Loads the model specified by model_path_kwargs and model_kwargs, decodes all possible binary latent vectors,
+    finds the closest datapoint in datapoints_array for each decoded vector, and returns the array of minimum distances.
+
+    Args:
+        model_path_kwargs (dict): Dictionary of model path parameters.
+        model_kwargs (dict): Dictionary of model initialization parameters.
+        datapoints_array (np.ndarray): Array of shape (n_datapoints, input_dim), containing datapoints.
+
+    Returns:
+        np.ndarray: Array of shape (2**latent_dim,) containing the minimum distances for each decoded vector.
+    """
+    decoded_binary_matrix = compute_decoded_binary_matrix(model_path_kwargs, model_kwargs)
+    closest_rows_indices = compute_closest_rows(decoded_binary_matrix, datapoints_array)
+    distances = np.linalg.norm(decoded_binary_matrix - datapoints_array[closest_rows_indices], axis=1)
+    return distances
 
 
 # ----------------------------------------------------------------------------
@@ -111,7 +161,21 @@ def compute_min_distances_frequencies(model_path_kwargs, model_kwargs, datapoint
 
 
 def compute_decoded_binary_matrix(model_path_kwargs, model_kwargs):
+    """
+    Decodes all possible binary latent vectors for a given model.
 
+    Loads the model specified by model_path_kwargs and model_kwargs, creates a binary matrix of all possible
+    latent states (shape: [2**latent_dim, latent_dim]), decodes each latent vector using the model, and returns
+    the resulting decoded matrix.
+
+    Args:
+        model_path_kwargs (dict): Dictionary of model path parameters.
+        model_kwargs (dict): Dictionary of model initialization parameters.
+
+    Returns:
+        np.ndarray: Decoded matrix of shape (2**latent_dim, input_dim), where each row is the decoded output
+                    for a binary latent vector.
+    """
     model = load_model(model_path_kwargs, model_kwargs)
     model.eval()
     with torch.no_grad():
@@ -122,6 +186,18 @@ def compute_decoded_binary_matrix(model_path_kwargs, model_kwargs):
 
 
 def compute_closest_rows(decoded_binary_matrix, datapoints_array):
+    """
+    For each row in the decoded_binary_matrix, finds the index of the closest row in datapoints_array
+    using minimum Euclidean distance.
+
+    Args:
+        decoded_binary_matrix (np.ndarray): Array of shape (n, d), where each row is a decoded feature vector.
+        datapoints_array (np.ndarray): Array of shape (m, d), where each row is a datapoint.
+
+    Returns:
+        np.ndarray: Array of shape (n,) containing the indices of the closest datapoint in datapoints_array
+                    for each row in decoded_binary_matrix.
+    """
     return np.array([find_closest_row(vec, datapoints_array) for vec in decoded_binary_matrix])
 
 
@@ -290,62 +366,7 @@ def plot_unique_frequencies_histogram(unique_frequencies, unique_counts, title="
 
 
 
-# def plot_multiple_labels_frequencies_histograms(labels_frequencies_matrix, first_indices=None, title=None, cmap_name='inferno', ax=None):
-#     """
-#     Plots multiple label frequency histograms vertically stacked.
-
-#     Args:
-#         labels_frequencies_matrix (np.ndarray): Array of shape (k, n_labels).
-#         first_indices (list or list of lists, optional): Indices for segment coloring, either shared or per realization.
-#         title (str, optional): Plot title.
-#         cmap_name (str, optional): Matplotlib colormap name.
-#         ax (matplotlib.axes.Axes, optional): Axis to plot on.
-#     """
-#     import matplotlib.pyplot as plt
-#     import numpy as np
-
-#     k, n = labels_frequencies_matrix.shape
-#     cmap = plt.get_cmap(cmap_name)
-
-#     if ax is None:
-#         fig, axes = plt.subplots(k, 1, figsize=(8, 2*k), sharex=True)
-#     else:
-#         axes = [ax] * k
-
-#     for idx in range(k):
-#         ax_i = axes[idx]
-#         freqs = labels_frequencies_matrix[idx]
-#         # Handle first_indices per realization
-#         if first_indices is not None:
-#             if isinstance(first_indices[0], (list, np.ndarray)):
-#                 indices = [int(x) for x in first_indices[idx]]
-#             else:
-#                 indices = [int(x) for x in first_indices]
-#             indices.append(n)
-#             num_segments = len(indices) - 1
-#             colors = [cmap(i / max(num_segments - 1, 1)) for i in range(num_segments)]
-#             for i in range(num_segments):
-#                 start = indices[i]
-#                 end = indices[i+1]
-#                 ax_i.bar(range(start, end), freqs[start:end], width=1.5, color=colors[i], label=f'Label {i}' if idx == 0 else None)
-#             if idx == 0:
-#                 ax_i.legend()
-#         else:
-#             ax_i.bar(range(n), freqs, color=cmap(0.5))
-#         ax_i.set_ylabel(f'k={idx+1}')
-#         ax_i.set_xticks([])
-
-#     axes[-1].set_xlabel('Label')
-#     if title is not None:
-#         axes[0].set_title(title)
-#     plt.tight_layout()
-
-
-
-
-    # ...existing code...
-
-def plot_multiple_labels_frequencies_histograms(labels_frequencies_list, labels_list=None, dataset_name=None, cmap_name='inferno', title=None):
+def plot_multiple_labels_frequencies_histograms(labels_frequencies_list, labels_list=None, dataset_name=None, cmap_name='inferno', title=None, y_range=None):
     """
     Plots multiple label frequency histograms vertically stacked.
     Accepts a list of arrays (possibly with different lengths).
@@ -370,6 +391,9 @@ def plot_multiple_labels_frequencies_histograms(labels_frequencies_list, labels_
         ax = axes[idx]
         freqs = labels_frequencies_list[idx]
         n = len(freqs)
+        if y_range is not None:
+            ax.set_ylim(y_range)
+
         if labels_list is not None:
             labels = labels_list[idx]
             first_indices = list(find_first_occurrences(labels).values())
@@ -545,7 +569,30 @@ def plot_multiple_unique_frequencies_lines(unique_frequencies_list, unique_count
 # ----------------------------------------------------------------------------
 
 
-def compute_datapoints_labels_freq_list(dataset, ld, datapoints_array, labels_array, save_dir=None):
+def compute_datapoints_labels_freq_list(dataset, ld, datapoints_array, labels_array, device, return_distances = False, save_dir=None):
+    """
+    Computes the frequency arrays for datapoints and labels being the closest to decoded binary latent vectors
+    across multiple repetitions and hidden layer configurations.
+
+    For each repetition and each number of hidden layers, loads the corresponding model, decodes all possible
+    binary latent vectors, and computes how often each datapoint and label is selected as the closest. Optionally,
+    also computes and returns the minimum distances for each decoded vector.
+
+    Args:
+        dataset (str): Name of the dataset.
+        ld (int): Latent dimension.
+        datapoints_array (np.ndarray): Array of shape (n_datapoints, input_dim), containing datapoints.
+        labels_array (np.ndarray): Array of shape (n_datapoints,), containing labels for each datapoint.
+        device (torch.device): Device to run the model on.
+        return_distances (bool, optional): If True, also returns the array of minimum distances.
+        save_dir (str, optional): Directory to save the computed frequency arrays.
+
+    Returns:
+        tuple:
+            - np.ndarray: Array of shape (n_repetitions, n_hidden_layers, n_datapoints) with frequencies for each datapoint.
+            - np.ndarray: Array of shape (n_repetitions, n_hidden_layers, n_labels) with frequencies for each label.
+            - np.ndarray (optional): Array of shape (n_repetitions, n_hidden_layers, 2**latent_dim) with minimum distances for each decoded vector.
+    """
 
     model_kwargs = {
         'input_dim': 28*28,
@@ -570,27 +617,34 @@ def compute_datapoints_labels_freq_list(dataset, ld, datapoints_array, labels_ar
 
     datapoints_freq_list = []
     labels_freq_list = []
+    distances_list = []
 
     for repetition in repetitions:
         datapoints_freq_hl = []
         labels_freq_hl = []
+        distances_hl = []
 
         for num_hidden_layers in hidden_layers:
             model_kwargs['hidden_layers'] = num_hidden_layers
             model_path_kwargs['num_hidden_layers'] = num_hidden_layers
+            model_path_kwargs['train_num'] = repetition
 
-            datapoints_frequencies, labels_frequencies = compute_min_distances_frequencies(
-                model_path_kwargs, model_kwargs, datapoints_array, labels_array
+
+            datapoints_frequencies, labels_frequencies, distances = compute_min_distances_frequencies(
+                model_path_kwargs, model_kwargs, datapoints_array, labels_array, return_distances=True
             )
 
             datapoints_freq_hl.append(datapoints_frequencies)
             labels_freq_hl.append(labels_frequencies)
-            
+            distances_hl.append(distances)
+
+        distances_list.append(distances_hl)
         datapoints_freq_list.append(datapoints_freq_hl)
         labels_freq_list.append(labels_freq_hl)
 
     repetitions_hl_datapoints_freq_array = np.array(datapoints_freq_list)
     repetitions_hl_labels_freq_array = np.array(labels_freq_list)
+    repetitions_hl_distances_array = np.array(distances_list)
 
     if save_dir is not None:
         with open(f"{save_dir}/datapoints_freq_list_{dataset}_{ld}ld.pkl", "wb") as f:
@@ -598,7 +652,74 @@ def compute_datapoints_labels_freq_list(dataset, ld, datapoints_array, labels_ar
         with open(f"{save_dir}/labels_freq_list_{dataset}_{ld}ld.pkl", "wb") as f:
             pickle.dump(repetitions_hl_labels_freq_array, f)
 
-    return repetitions_hl_datapoints_freq_array, repetitions_hl_labels_freq_array
+    if return_distances:
+        return repetitions_hl_datapoints_freq_array, repetitions_hl_labels_freq_array, repetitions_hl_distances_array
+    else:
+        return repetitions_hl_datapoints_freq_array, repetitions_hl_labels_freq_array
+
+
+
+def compute_distances_list(dataset, ld, datapoints_array, device):
+    """
+    Computes the minimum distances between decoded binary latent vectors and their closest datapoints
+    for multiple repetitions and hidden layer configurations.
+
+    For each repetition and each number of hidden layers, loads the corresponding model, decodes all possible
+    binary latent vectors, and computes the minimum Euclidean distance to the closest datapoint.
+
+    Args:
+        dataset (str): Name of the dataset.
+        ld (int): Latent dimension.
+        datapoints_array (np.ndarray): Array of shape (n_datapoints, input_dim), containing datapoints.
+        device (torch.device): Device to run the model on.
+
+    Returns:
+        np.ndarray: Array of shape (n_repetitions, n_hidden_layers, 2**latent_dim) with minimum distances for each decoded vector.
+    """
+
+    model_kwargs = {
+        'input_dim': 28*28,
+        'latent_dim': ld,
+        'decrease_rate': 0.6,
+        'device': device,
+        'output_activation_encoder': nn.Sigmoid
+    }
+    model_path_kwargs = {
+        'output_activation_encoder': 'sigmoid output',
+        'train_type': 'simultaneous train',
+        'latent_dim': f"{model_kwargs['latent_dim']}ld",
+        'decrease_rate': '06',
+        'learning_rate': '1e3',
+        'train_num': 0,
+    }
+    model_path_kwargs['dataset'] = dataset
+
+
+    repetitions = range(6)
+    hidden_layers = range(1, 8)
+
+    distances_list = []
+
+    for repetition in repetitions:
+
+        distances_hl = []
+
+        for num_hidden_layers in hidden_layers:
+            model_kwargs['hidden_layers'] = num_hidden_layers
+            model_path_kwargs['num_hidden_layers'] = num_hidden_layers
+            model_path_kwargs['train_num'] = repetition
+
+            distances = compute_min_distances(
+                model_path_kwargs, model_kwargs, datapoints_array
+            )
+
+            distances_hl.append(distances)
+
+        distances_list.append(distances_hl)
+
+    repetitions_hl_distances_array = np.array(distances_list)
+
+    return repetitions_hl_distances_array
 
 
 
