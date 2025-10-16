@@ -15,7 +15,8 @@ def train(
     writer,
     scheduler=None,
     save_tensorboard_parameters=False,
-    starting_epoch = 0
+    starting_epoch = 0,
+    l1_lambda = 0.0
 ):
     
 
@@ -29,7 +30,7 @@ def train(
             data = data.to(model.device)
             optimizer.zero_grad()
             output = model(data)
-            loss = nn.MSELoss()(output, data)
+            loss = nn.MSELoss()(output, data) + l1_lambda * sum(p.abs().sum() for p in model.parameters())
             loss.backward()
             optimizer.step()
             train_loss += loss.item()
