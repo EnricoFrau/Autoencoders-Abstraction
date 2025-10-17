@@ -271,7 +271,7 @@ def load_model(model_path_kwargs, model_kwargs):
         **model_kwargs,
         output_activation_decoder=nn.Sigmoid
     ).to(model_kwargs['device'])
-    model_path = f"../models/{model_path_kwargs['output_activation_encoder']}/{model_path_kwargs['train_type']}/sigmoid output decoder/{model_path_kwargs['latent_dim']}/{model_path_kwargs['dataset']}/dr{model_path_kwargs['decrease_rate']}_{model_path_kwargs['num_hidden_layers']}hl_{model_path_kwargs['train_num']}.pth"
+    model_path = f"../models/{model_path_kwargs['output_activation_encoder']}/{model_path_kwargs['train_type']}/sigmoid output decoder/l1 reg/{model_path_kwargs['latent_dim']}/{model_path_kwargs['dataset']}/dr{model_path_kwargs['decrease_rate']}_{model_path_kwargs['num_hidden_layers']}hl_{model_path_kwargs['train_num']}.pth"
     my_model.load_state_dict(torch.load(model_path, map_location=model_kwargs['device']))
     return my_model
 

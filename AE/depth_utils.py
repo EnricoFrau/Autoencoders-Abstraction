@@ -15,10 +15,36 @@ from AE.utils import calc_ms
 
 from AE.models import AE_0
 
+
+from AE.overlaps import load_model
+
 IS_TEST_MODE = False
 
 
 # –––––––––––––––––––––––––––––––––––– EXPORTED TO DEPTH_ANALYSIS –––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––
+
+
+def mean_over_outer_dict(dataset_dicts, selected_train_nums=None):
+    # If not specified, use all train_nums
+    if selected_train_nums is None:
+        train_nums = list(dataset_dicts.keys())
+    else:
+        train_nums = list(selected_train_nums)
+    # Get all dataset names (assume all inner dicts have the same keys)
+    dataset_names = list(dataset_dicts[train_nums[0]].keys())
+    # Prepare output
+    mean_dict = {ds: [] for ds in dataset_names}
+    # Find the minimum length for each dataset to avoid shape mismatch
+    min_lengths = {ds: min(len(dataset_dicts[tn][ds]) for tn in train_nums) for ds in dataset_names}
+    # Compute mean for each dataset and each position
+    for ds in dataset_names:
+        # Stack lists for this dataset across all selected train_nums, up to min length
+        stacked = np.array([dataset_dicts[tn][ds][:min_lengths[ds]] for tn in train_nums])
+        mean_dict[ds] = stacked.mean(axis=0).tolist()
+    return mean_dict
+
+
+
 def write_encoded_dataset_on_file_sigmoid_output(data_loader, model_kwargs, device, model_path_kwargs, num_hidden_layers_range):
     """
     Encodes a dataset using autoencoder models with varying numbers of hidden layers and writes the encoded outputs to text files.
@@ -109,13 +135,9 @@ def compute_dataset_klds_gs_dict_from_sampled_binarized_vectors_(dataset, data_l
         if IS_TEST_MODE:
             print(f"{num_hidden_layers} hidden layers...")
 
-        model = AE_0(
-            **model_kwargs,
-            hidden_layers=num_hidden_layers
-        ).to(device)
-        model_path = f"../models/{model_path_kwargs['output_activation_encoder']}/{model_path_kwargs['train_type']}/{model_path_kwargs['latent_dim']}/{model_path_kwargs['dataset']}/dr{model_path_kwargs['decrease_rate']}_{num_hidden_layers}hl_{model_path_kwargs['train_num']}.pth"
-        model.load_state_dict(torch.load(model_path, map_location=device))
-        
+        model_path_kwargs['num_hidden_layers'] = num_hidden_layers
+        model_kwargs['hidden_layers'] = num_hidden_layers
+        model = load_model(model_path_kwargs, model_kwargs)
 
         model.eval()
 
