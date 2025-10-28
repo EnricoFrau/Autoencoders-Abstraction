@@ -1,6 +1,6 @@
 This repository contains the code used to develop the analysis (and not only) of the Autoencoder Section in the paper [Absolute Abstraction: a renormalization group approach](https://arxiv.org/html/2407.01656v4).
 
-Here can be find an overview of the repository content:
+Here can be found an overview of the repository content:
 - Research codebase for studying abstraction in autoencoders by training and comparing models across depth and latent sizes on MNIST-family datasets (2MNIST, 2MNISTonly, MNIST, EMNIST, FEMNIST).
 - Core PyTorch models: AE.models.AE_0 and AE.models.ProgressiveAE; training loop in AE.train.train.
 - Analysis utilities compute HFM KL divergence, optimal binarization thresholds, gauge permutations, and activation frequencies, e.g. AE.depth_utils.calc_hfm_kld_with_optimal_g and AE.depth_utils.compute_emp_states_dict_gauged.
