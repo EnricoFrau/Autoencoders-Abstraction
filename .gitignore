@@ -6,4 +6,4 @@ Images/
 models/
 pure encoding/
 runs/
-lr_scheduler/
+lr_schedulers/
