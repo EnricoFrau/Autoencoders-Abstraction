@@ -431,7 +431,7 @@ def datasets_dicts_comparison_colored(
         plt.gca().add_collection(lc)
 
     plt.xlabel("Number of hidden layers")
-    plt.ylabel("KLd")
+    plt.ylabel("Dkl with HFM")
     plt.title(title)
     plt.legend()
     plt.grid(True)

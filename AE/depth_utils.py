@@ -13,6 +13,8 @@ from AE.utils import compute_emp_states_dict, compute_sampled_emp_states_dict
 from AE.utils import calc_Z_theoretical
 from AE.utils import calc_ms
 
+from AE.overlaps import load_model
+
 from AE.models import AE_0
 
 
@@ -67,14 +69,12 @@ def write_encoded_dataset_on_file_sigmoid_output(data_loader, model_kwargs, devi
     
     for num_hidden_layers in num_hidden_layers_range:
 
-        my_model = AE_0(
-            **model_kwargs,
-            hidden_layers=num_hidden_layers
-        ).to(device)
-        model_path = f"../models/{model_path_kwargs['output_activation_encoder']}/{model_path_kwargs['train_type']}/{model_path_kwargs['latent_dim']}/{model_path_kwargs['dataset']}/dr{model_path_kwargs['decrease_rate']}_{num_hidden_layers}hl_{model_path_kwargs['train_num']}.pth"
-        my_model.load_state_dict(torch.load(model_path, map_location=device))
-        save_dir = f"../pure encoding/{model_path_kwargs['output_activation_encoder']}/{model_path_kwargs['train_type']}/{model_path_kwargs['latent_dim']}/{model_path_kwargs['dataset']}/{model_path_kwargs['train_num']}/{num_hidden_layers}hl.txt"
+        model_path_kwargs['num_hidden_layers'] = num_hidden_layers
+        model_kwargs['hidden_layers'] = num_hidden_layers
 
+        my_model = load_model(model_path_kwargs, model_kwargs)
+
+        save_dir = f"../pure encoding/{model_path_kwargs['output_activation_encoder']}/{model_path_kwargs['train_type']}/sigmoid output decoder/{model_path_kwargs['latent_dim']}/{model_path_kwargs['dataset']}/{model_path_kwargs['train_num']}/{num_hidden_layers}hl.txt"
         my_model.eval()
         with open(save_dir, 'w') as f:
             with torch.no_grad():
