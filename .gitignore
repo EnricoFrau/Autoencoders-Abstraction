@@ -8,3 +8,7 @@ pure encoding/
 runs/
 lr_schedulers/
 notebooks/experiments.ipynb
+.vscode/
+notebooks/
+preliminary data/
+savings/
