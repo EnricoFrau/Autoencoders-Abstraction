@@ -19,6 +19,7 @@ def train(
     l1_lambda = 0.0
 ):
     
+    criterion = nn.MSELoss()
 
     global_batch_idx = 0
 
@@ -27,10 +28,15 @@ def train(
         train_loss = 0.0
 
         for batch_idx, (data, _) in enumerate(train_loader):
-            data = data.to(model.device)
+            data = data.to(model.device, non_blocking=True)
             optimizer.zero_grad()
             output = model(data)
-            loss = nn.MSELoss()(output, data) + l1_lambda * sum(p.abs().sum() for p in model.parameters())
+            loss = criterion(output, data) #+ l1_lambda * sum(p.abs().sum() for p in model.parameters())
+            if l1_lambda:
+                l1 = 0.0
+                for p in model.parameters():
+                    l1 += p.abs().sum()
+                loss = loss + l1_lambda * l1
             loss.backward()
             optimizer.step()
             train_loss += loss.item()
@@ -53,9 +59,9 @@ def train(
         val_loss = 0.0
         with torch.no_grad():
             for batch_idx, (data, _) in enumerate(val_loader):
-                data = data.to(model.device)
+                data = data.to(model.device, non_blocking=True)
                 output = model(data)
-                loss = nn.MSELoss()(output, data)
+                loss = criterion(output, data)
                 val_loss += loss.item()
 
         writer.add_scalar(
