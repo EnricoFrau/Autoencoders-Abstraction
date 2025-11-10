@@ -11,3 +11,5 @@ lr_schedulers/
 notebooks/
 preliminary data/
 savings/
+datasets/
+test.sh

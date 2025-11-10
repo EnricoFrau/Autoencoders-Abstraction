@@ -10,6 +10,11 @@ from torchvision import datasets, transforms
 import warnings
 warnings.filterwarnings("ignore")
 
+import os
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+datasets_path = os.path.join(project_root, 'datasets')
+
+
 
 
 
@@ -363,3 +368,42 @@ class FEMNISTDataset(Dataset):
         else:
             image, label = self.fashionmnist_data[idx - len(self.emnist_data)]
         return image, label
+
+
+
+
+# --------------------------------------------------------------------
+
+
+batch_size = 128
+num_workers = min(8, os.cpu_count() or 1)
+pin_memory = torch.cuda.is_available()
+persistent_workers = pin_memory
+
+train_loader_MNIST = torch.utils.data.DataLoader(
+    datasets.MNIST(
+        datasets_path,
+        train=True,
+        download=True,
+        transform=transforms.ToTensor()
+        ),
+    batch_size=batch_size,
+    shuffle=True,
+    num_workers=num_workers,
+    pin_memory=pin_memory,
+    persistent_workers=persistent_workers
+    )
+
+val_loader_MNIST = torch.utils.data.DataLoader(
+    datasets.MNIST(
+        datasets_path,
+        train=False,
+        download=True,
+        transform=transforms.ToTensor()
+        ),
+    batch_size=batch_size,
+    shuffle=False,
+    num_workers=num_workers,
+    pin_memory=pin_memory,
+    persistent_workers=persistent_workers
+    )
