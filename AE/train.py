@@ -11,6 +11,7 @@ def train(
     epochs,
     train_loader,
     val_loader,
+    device,
     optimizer,
     writer,
     scheduler=None,
@@ -28,7 +29,7 @@ def train(
         train_loss = 0.0
 
         for batch_idx, (data, _) in enumerate(train_loader):
-            data = data.to(model.device, non_blocking=True)
+            data = data.to(device, non_blocking=True)
             optimizer.zero_grad()
             output = model(data)
             loss = criterion(output, data) #+ l1_lambda * sum(p.abs().sum() for p in model.parameters())
@@ -59,7 +60,7 @@ def train(
         val_loss = 0.0
         with torch.no_grad():
             for batch_idx, (data, _) in enumerate(val_loader):
-                data = data.to(model.device, non_blocking=True)
+                data = data.to(device, non_blocking=True)
                 output = model(data)
                 loss = criterion(output, data)
                 val_loss += loss.item()
@@ -76,6 +77,139 @@ def train(
     writer.close()
     print(
         f"Training completed. Final training loss: {train_loss / len(train_loader.dataset)}, Validation loss: {val_loss / len(val_loader.dataset)}"
+    )
+
+
+
+
+def train_recursiveAE(
+    model,
+    epochs,
+    train_loader,
+    val_loader,
+    device,
+    optimizer,
+    writer,
+    scheduler=None,
+    starting_epoch=0,
+    latent_match_weight=1.0,
+    detach_encoded_target=False,
+    save_tensorboard_parameters=False,
+    l1_lambda=0.0,
+    recursive_lambda=0.1
+):
+    """
+    Trains a model whose final output layer size is (input_dim + latent_dim).
+    Loss = MSE(reconstruction) + latent_match_weight * MSE(latent_alignment).
+
+    Assumes:
+      model.encode(x) returns (B, latent_dim)
+      model.decode(z) returns (B, input_dim + latent_dim) when configured for extended output
+      model.input_dim and model.latent_dim are set
+    """
+    mse = nn.MSELoss()
+    input_dim = model.input_dim
+    latent_dim = model.latent_dim
+
+    global_batch_idx = 0
+
+    for epoch in range(epochs):
+        model.train()
+        total_train_loss = 0.0
+        total_recon_loss = 0.0
+        total_latent_loss = 0.0
+
+        for batch_idx, (data, _) in enumerate(train_loader):
+            data = data.to(device, non_blocking=True)
+            optimizer.zero_grad()
+
+            # Encode once
+            encoded_latent = model.encode(data)  # (B, latent_dim)
+            encoded_target = encoded_latent.detach() if detach_encoded_target else encoded_latent
+
+            # Decode from the latent to get extended output (input_dim + latent_dim)
+            extended_out = model.decode(encoded_latent)  # (B, input_dim + latent_dim)
+            decoded_part = extended_out[:, :input_dim]
+            predicted_latent_part = extended_out[:, input_dim:]  # (B, latent_dim)
+
+            # Match shapes for reconstruction loss
+            if decoded_part.shape != data.shape:
+                decoded_part = decoded_part.view_as(data)
+
+
+            recon_loss = mse(decoded_part, data)
+            latent_loss = mse(predicted_latent_part, encoded_target)
+            loss = recon_loss + latent_match_weight * latent_loss
+
+            if l1_lambda:
+                l1 = sum(p.abs().sum() for p in model.parameters())
+                loss = loss + l1_lambda * l1
+
+            loss.backward()
+            optimizer.step()
+
+            total_train_loss += loss.item()
+            total_recon_loss += recon_loss.item()
+            total_latent_loss += latent_loss.item()
+            global_batch_idx += 1
+
+        if scheduler is not None:
+            scheduler.step()
+
+        n_train = len(train_loader.dataset)
+        writer.add_scalar("Loss/train_total", total_train_loss / n_train, global_step=(epoch + starting_epoch))
+        writer.add_scalar("Loss/train_recon", total_recon_loss / n_train, global_step=(epoch + starting_epoch))
+        writer.add_scalar("Loss/train_latent", total_latent_loss / n_train, global_step=(epoch + starting_epoch))
+
+        print(
+            f"Epoch {epoch+1}/{epochs} | "
+            f"Total: {(total_train_loss / n_train):.4f} | "
+            f"Recon: {(total_recon_loss / n_train):.4f} | "
+            f"Latent: {(total_latent_loss / n_train):.4f}"
+        )
+
+        # ---------------- Validation ----------------
+        model.eval()
+        val_total = 0.0
+        val_recon = 0.0
+        val_latent = 0.0
+        with torch.no_grad():
+            for data, _ in val_loader:
+                data = data.to(device, non_blocking=True)
+
+                encoded_latent = model.encode(data)
+                extended_out = model.decode(encoded_latent)
+                decoded_part = extended_out[:, :input_dim]
+                predicted_latent_part = extended_out[:, input_dim:]
+
+                if decoded_part.shape != data.shape:
+                    decoded_part = decoded_part.view_as(data)
+
+                recon_loss = mse(decoded_part, data)
+                latent_loss = mse(predicted_latent_part, encoded_latent)
+                loss = recon_loss + latent_match_weight * latent_loss
+
+                val_total += loss.item()
+                val_recon += recon_loss.item()
+                val_latent += latent_loss.item()
+
+        n_val = len(val_loader.dataset)
+        writer.add_scalar("Loss/val_total", val_total / n_val, global_step=(epoch + starting_epoch))
+        writer.add_scalar("Loss/val_recon", val_recon / n_val, global_step=(epoch + starting_epoch))
+        writer.add_scalar("Loss/val_latent", val_latent / n_val, global_step=(epoch + starting_epoch))
+
+        if save_tensorboard_parameters:
+            for name, p in model.named_parameters():
+                writer.add_histogram(name, p, global_step=(epoch + starting_epoch))
+                if p.grad is not None:
+                    writer.add_histogram(f"{name}.grad", p.grad, global_step=(epoch + starting_epoch))
+
+    writer.close()
+    print(
+        f"Training completed. Final losses (per sample): "
+        f"Train Total={total_train_loss / n_train:.4f}, Val Total={val_total / n_val:.4f}, "
+        f"Train Recon={total_recon_loss / n_train:.4f}, Val Recon={val_recon / n_val:.4f}, "
+        f"Train Latent={total_latent_loss / n_train:.4f}, Val Latent={val_latent / n_val:.4f}"
     )
 
 
@@ -460,6 +594,10 @@ def train_mixed_hidden(
     print(
         f"Training completed. Final training loss: {train_loss / len(train_loader.dataset)}, Validation loss: {val_loss / len(val_loader.dataset)}"
     )
+
+
+
+
 
 
 

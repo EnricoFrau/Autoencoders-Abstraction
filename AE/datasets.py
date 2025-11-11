@@ -375,7 +375,7 @@ class FEMNISTDataset(Dataset):
 # --------------------------------------------------------------------
 
 
-batch_size = 128
+batch_size = 1024
 num_workers = min(8, os.cpu_count() or 1)
 pin_memory = torch.cuda.is_available()
 persistent_workers = pin_memory

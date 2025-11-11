@@ -7,7 +7,6 @@ class AE_0(nn.Module):
         self,
         input_dim,
         latent_dim,
-        device,
         hidden_layers=1,
         decrease_rate=0.5,
         activation_fn=nn.ReLU,
@@ -16,14 +15,14 @@ class AE_0(nn.Module):
         BatchNorm=False,
         LayerNorm=False,
         he_init=False,
-        set_bias=None
+        set_bias=None,
+        recursive_last_layer=False,
     ):
         super().__init__()
 
         self.input_dim = input_dim
         self.latent_dim = latent_dim
         self.number_of_hidden_layers = hidden_layers
-        self.device = device
         self.activation_fn = activation_fn
 
         encoder_neurons_sizes = [input_dim]
@@ -46,12 +45,11 @@ class AE_0(nn.Module):
                 encoder_layers.append(self.activation_fn())
             elif output_activation_encoder is not None:
                 encoder_layers.append(output_activation_encoder())
-
-        self.encoder = nn.Sequential(*encoder_layers).to(
-            self.device
-        )  # TOCHECK TO DEVICE
+        self.encoder = nn.Sequential(*encoder_layers)
 
         decoder_neurons_sizes = list(reversed(encoder_neurons_sizes))
+        if recursive_last_layer:
+            decoder_neurons_sizes[-1] = input_dim + latent_dim
         decoder_layers = []
         for i in range(len(decoder_neurons_sizes) - 1):
             decoder_layers.append(
@@ -66,9 +64,7 @@ class AE_0(nn.Module):
             elif output_activation_decoder is not None:
                 decoder_layers.append(output_activation_decoder())
 
-        self.decoder = nn.Sequential(*decoder_layers).to(
-            self.device
-        )  # TOCHECK TO DEVICE
+        self.decoder = nn.Sequential(*decoder_layers)
 
 
         if set_bias is not None:
