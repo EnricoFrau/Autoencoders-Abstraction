@@ -5,6 +5,7 @@ import torch.nn as nn
 from AE.models import AE_0
 from torchvision import datasets, transforms
 from AE.datasets import MNISTDigit2OnlyDataset, MNISTDigit2Dataset, FEMNISTDataset
+from AE.utils import load_model
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.special import rel_entr
@@ -266,13 +267,13 @@ def compute_min_dist_labels_frequencies(closest_rows_indices, labels_array):
 
 
 
-def load_model(model_path_kwargs, model_kwargs):
-    my_model = AE_0(
-        **model_kwargs,
-    ).to(model_kwargs['device'])
-    model_path = f"../models/{model_path_kwargs['output_activation_encoder']}/{model_path_kwargs['train_type']}/{model_path_kwargs['latent_dim']}/{model_path_kwargs['dataset']}/dr{model_path_kwargs['decrease_rate']}_{model_path_kwargs['num_hidden_layers']}hl_{model_path_kwargs['train_num']}.pth"
-    my_model.load_state_dict(torch.load(model_path, map_location=model_kwargs['device']))
-    return my_model
+# def load_model(model_path_kwargs, model_kwargs):
+#     my_model = AE_0(
+#         **model_kwargs,
+#     ).to(model_kwargs['device'])
+#     model_path = f"../models/{model_path_kwargs['output_activation_encoder']}/{model_path_kwargs['train_type']}/{model_path_kwargs['latent_dim']}/{model_path_kwargs['dataset']}/dr{model_path_kwargs['decrease_rate']}_{model_path_kwargs['num_hidden_layers']}hl_{model_path_kwargs['train_num']}.pth"
+#     my_model.load_state_dict(torch.load(model_path, map_location=model_kwargs['device']))
+#     return my_model
 
 
 

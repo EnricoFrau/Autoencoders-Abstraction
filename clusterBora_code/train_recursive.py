@@ -50,8 +50,6 @@ def main():
         "MNIST": val_loader_MNIST,
     }
 
-
-
     runs_dir = os.path.join(project_root, "runs", "recursive")
     models_dir = os.path.join(project_root, "models", "recursive")
 
@@ -68,43 +66,46 @@ def main():
         decrease_rate = 0.6
         train_loader = train_loaders[dataset]
         val_loader = val_loaders[dataset]
-        train_num = 0
 
 
-        for latent_dim in (10,):
-            print(f"-----------------------{latent_dim} LATENT_DIM----------------------")
+        for latent_match_weight in (0.1, 0.3, 0.5, 0.7, 0.9):
+            print(f"\n\n----------------- latent_match_weight = {latent_match_weight} --------------\n\n")
 
-            num_hidden_layers = 1
+            for train_num in range(3):
+                for latent_dim in (10,):
+                    print(f"-----------------------{latent_dim} LATENT_DIM----------------------")
 
-            print(f"\n\n----------------- {num_hidden_layers} num_hidden_layers --------------\n\n")
+                    num_hidden_layers = 1
+
+                    print(f"\n\n----------------- {num_hidden_layers} num_hidden_layers --------------\n\n")
+                    
+                    new_model = AE_0(input_dim=input_dim, latent_dim=latent_dim, decrease_rate=decrease_rate, hidden_layers = num_hidden_layers, output_activation_encoder=nn.Sigmoid, output_activation_decoder=nn.Sigmoid, recursive_last_layer=True, he_init=False).to(device)
+                    
+                    writer = SummaryWriter(log_dir=os.path.join(runs_dir, f'lm_lmb_{latent_match_weight}', f'{latent_dim}ld', dataset, f'dr{decrease_rate_str}_lr{learning_rate_str}_lwpretrain_{num_hidden_layers}hl_{train_num}'))
+                    optimizer = optim.Adam(new_model.parameters(), lr=learning_rate, weight_decay=weight_decay)
+                    train_recursiveAE(new_model, writer=writer, train_loader=train_loader, val_loader=val_loader, device=device, optimizer=optimizer, epochs=10, detach_encoded_target=False, latent_match_weight=latent_match_weight)
+                    save_dir = os.path.join(models_dir, f'lm_lmb_{latent_match_weight}', f'{latent_dim}ld', dataset, f'dr{decrease_rate_str}_lr{learning_rate_str}_lwpretrain_{num_hidden_layers}hl_{train_num}.pth')
+                    torch.save(new_model.state_dict(), save_dir)
+
+                    ex_model = AE_0(input_dim=input_dim, latent_dim=latent_dim, decrease_rate=decrease_rate, hidden_layers = num_hidden_layers, output_activation_encoder=nn.Sigmoid, output_activation_decoder=nn.Sigmoid, recursive_last_layer=True).to(device)
+                    ex_model.load_state_dict(new_model.state_dict())
+
+                    for num_hidden_layers in range(2,8):
+                        print(f"\n\n----------------- {num_hidden_layers} num_hidden_layers --------------\n\n")
+                        
+                        new_model = AE_0(input_dim=input_dim, latent_dim=latent_dim, decrease_rate=decrease_rate, hidden_layers = num_hidden_layers, output_activation_encoder=nn.Sigmoid, output_activation_decoder=nn.Sigmoid, recursive_last_layer=True, he_init=False).to(device)
+                        layer_wise_pretrain_load_dict(ex_model, new_model)
+
+                        writer = SummaryWriter(log_dir=os.path.join(runs_dir, f'lm_lmb_{latent_match_weight}', f'{latent_dim}ld', dataset, f'dr{decrease_rate_str}_lr{learning_rate_str}_lwpretrain_{num_hidden_layers}hl_{train_num}'))
+                        optimizer = optim.Adam(new_model.parameters(), lr=learning_rate, weight_decay=weight_decay)
+                        train_recursiveAE(new_model, writer=writer, train_loader=train_loader, val_loader=val_loader, device=device,optimizer=optimizer, epochs=10, detach_encoded_target=False, latent_match_weight=latent_match_weight)
+                        save_dir = os.path.join(models_dir, f'lm_lmb_{latent_match_weight}', f'{latent_dim}ld', dataset, f'dr{decrease_rate_str}_lr{learning_rate_str}_lwpretrain_{num_hidden_layers}hl_{train_num}.pth')
+                        torch.save(new_model.state_dict(), save_dir)
+
+                        ex_model = AE_0(input_dim=input_dim, latent_dim=latent_dim, decrease_rate=decrease_rate, hidden_layers = num_hidden_layers, output_activation_encoder=nn.Sigmoid, output_activation_decoder=nn.Sigmoid, recursive_last_layer=True).to(device)
+                        ex_model.load_state_dict(new_model.state_dict())
             
-            new_model = AE_0(input_dim=input_dim, latent_dim=latent_dim, decrease_rate=decrease_rate, hidden_layers = num_hidden_layers, output_activation_encoder=nn.Sigmoid, recursive_last_layer=True, he_init=False).to(device)
-            
-            writer = SummaryWriter(log_dir=os.path.join(runs_dir, f'{latent_dim}ld', dataset, f'dr{decrease_rate_str}_lr{learning_rate_str}_lwpretrain_{num_hidden_layers}hl_{train_num}'))
-            optimizer = optim.Adam(new_model.parameters(), lr=learning_rate, weight_decay=weight_decay)
-            train_recursiveAE(new_model, writer=writer, train_loader=train_loader, val_loader=val_loader, device=device, optimizer=optimizer, epochs=10, detach_encoded_target=False)
-            save_dir = os.path.join(models_dir, f'{latent_dim}ld', dataset, f'dr{decrease_rate_str}_lr{learning_rate_str}_lwpretrain_{num_hidden_layers}hl_{train_num}.pth')
-            torch.save(new_model.state_dict(), save_dir)
-
-            ex_model = AE_0(input_dim=input_dim, latent_dim=latent_dim, decrease_rate=decrease_rate, hidden_layers = num_hidden_layers, output_activation_encoder=nn.Sigmoid, recursive_last_layer=True).to(device)
-            ex_model.load_state_dict(new_model.state_dict())
-
-            for num_hidden_layers in range(2,8):
-                print(f"\n\n----------------- {num_hidden_layers} num_hidden_layers --------------\n\n")
-                
-                new_model = AE_0(input_dim=input_dim, latent_dim=latent_dim, decrease_rate=decrease_rate, hidden_layers = num_hidden_layers, output_activation_encoder=nn.Sigmoid, recursive_last_layer=True, he_init=False).to(device)
-                layer_wise_pretrain_load_dict(ex_model, new_model)
-
-                writer = SummaryWriter(log_dir=os.path.join(runs_dir, f'{latent_dim}ld', dataset, f'dr{decrease_rate_str}_lr{learning_rate_str}_lwpretrain_{num_hidden_layers}hl_{train_num}'))
-                optimizer = optim.Adam(new_model.parameters(), lr=learning_rate, weight_decay=weight_decay)
-                train_recursiveAE(new_model, writer=writer, train_loader=train_loader, val_loader=val_loader, device=device,optimizer=optimizer, epochs=10, detach_encoded_target=False)
-                save_dir = os.path.join(models_dir, f'{latent_dim}ld', dataset, f'dr{decrease_rate_str}_lr{learning_rate_str}_lwpretrain_{num_hidden_layers}hl_{train_num}.pth')
-                torch.save(new_model.state_dict(), save_dir)
-
-                ex_model = AE_0(input_dim=input_dim, latent_dim=latent_dim, decrease_rate=decrease_rate, hidden_layers = num_hidden_layers, output_activation_encoder=nn.Sigmoid, recursive_last_layer=True).to(device)
-                ex_model.load_state_dict(new_model.state_dict())
-        
-    print("\n\n\n=================TRAINING ENDED=================\n\n\n")
+        print("\n\n\n=================TRAINING ENDED=================\n\n\n")
 
 
 if __name__ == "__main__":

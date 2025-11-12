@@ -266,6 +266,55 @@ def visualize_bottleneck_neurons(model, device, img_shape=(28, 28), save_dir = N
         plt.show()
 
 
+def visualize_gauged_bottleneck_neurons(model, device, base_vector, img_shape=(28, 28), save_dir=None, file_name=None, EMNIST=False):
+    """
+    Visualize the effect of flipping each neuron in a binary bottleneck vector.
+
+    Args:
+        model: Trained autoencoder model with a .decode() method.
+        device: Device to run computations on.
+        base_vector: 1D numpy or torch tensor of zeros and ones, length = model.latent_dim.
+        img_shape: Shape to reshape the decoded output (default: (28, 28)).
+        save_dir: Directory to save the figure (optional).
+        file_name: Name of the file to save (optional).
+        EMNIST: If True, rotate and flip images for EMNIST.
+    """
+    import torch
+    import numpy as np
+    import matplotlib.pyplot as plt
+
+    model.eval()
+    latent_dim = model.latent_dim
+    base_vector = torch.tensor(base_vector, dtype=torch.float32, device=device)
+    if base_vector.dim() == 1:
+        base_vector = base_vector.unsqueeze(0)  # shape [1, latent_dim]
+
+    n_cols = (latent_dim + 1) // 2
+    n_rows = 2
+
+    with torch.no_grad():
+        fig, axes = plt.subplots(n_rows, n_cols, figsize=(2.5 * n_cols, 5))
+        axes = axes.flatten()
+        for i in range(latent_dim):
+            flipped = base_vector.clone()
+            flipped[0, i] = 1.0 - flipped[0, i]  # flip bit
+            decoded = model.decode(flipped).cpu().view(*img_shape)
+            ax = axes[i]
+            if EMNIST:
+                decoded = np.rot90(decoded, k=1)
+                decoded = np.flipud(decoded)
+            ax.imshow(decoded, cmap='gray')
+            ax.set_title(f'Flip neuron {i+1}')
+            ax.axis('off')
+        # Hide unused subplots
+        for j in range(latent_dim, n_rows * n_cols):
+            axes[j].axis('off')
+        plt.tight_layout()
+
+        save_fig(save_dir, file_name)
+        plt.show()
+
+
 def visualize_decoded_from_latent_vectors(model, latent_vectors, device, img_shape=(28, 28), save_dir=None, file_name=None, cmap='gray'):
     """
     Decodes and plots images from given latent vectors.

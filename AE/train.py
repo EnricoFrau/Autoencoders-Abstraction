@@ -95,8 +95,7 @@ def train_recursiveAE(
     latent_match_weight=1.0,
     detach_encoded_target=False,
     save_tensorboard_parameters=False,
-    l1_lambda=0.0,
-    recursive_lambda=0.1
+    l1_lambda=0.0
 ):
     """
     Trains a model whose final output layer size is (input_dim + latent_dim).

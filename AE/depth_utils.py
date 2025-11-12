@@ -8,6 +8,9 @@ from torch.nn import Module
 from torch.utils.data import DataLoader
 import torch
 
+import os
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+
 from AE.utils import calc_hfm_kld, calc_hfm_kld_with_marginalized_hfm
 from AE.utils import compute_emp_states_dict, compute_sampled_emp_states_dict
 from AE.utils import calc_Z_theoretical
@@ -94,7 +97,7 @@ def write_encoded_dataset_on_file_sigmoid_output(data_loader, model_kwargs, devi
 
 
 
-def compute_dataset_klds_gs_dict_from_sampled_binarized_vectors_(dataset, data_loader, model_kwargs, device, model_path_kwargs, num_hidden_layers_range, hfm_distribution = 'pure', dataset_klds_dict = None, dataset_gs_dict = None):
+def compute_dataset_klds_gs_dict_from_sampled_binarized_vectors_(dataset, data_loader, model_kwargs, device, num_hidden_layers_range, hfm_distribution = 'pure', dataset_klds_dict = None, dataset_gs_dict = None, save_permutations = False):
     """
     Computes and stores the Kullback-Leibler divergences (KLDs) and optimal 'g' values for a given dataset
     using autoencoder models with varying numbers of hidden layers.
@@ -135,13 +138,11 @@ def compute_dataset_klds_gs_dict_from_sampled_binarized_vectors_(dataset, data_l
         if IS_TEST_MODE:
             print(f"{num_hidden_layers} hidden layers...")
 
-        model_path_kwargs['num_hidden_layers'] = num_hidden_layers
-        model_kwargs['hidden_layers'] = num_hidden_layers
-        model = load_model(model_path_kwargs, model_kwargs)
-
+        model_kwargs['num_hidden_layers'] = num_hidden_layers
+        model = load_model(model_kwargs, device=device)
         model.eval()
 
-        kld, g = calc_hfm_kld_with_optimal_g(model, data_loader, return_g=True, binarize_threshold=None, hfm_distribution=hfm_distribution)
+        kld, g = calc_hfm_kld_with_optimal_g(model, data_loader, return_g=True, binarize_threshold=None, hfm_distribution=hfm_distribution, save_permutations=save_permutations, model_kwargs=model_kwargs)
 
         dataset_klds_dict[dataset].append(kld)
         dataset_gs_dict[dataset].append(g)
@@ -393,7 +394,8 @@ def compute_bottleneck_neurons_activ_freq(
         model: Module,
         dataloader: DataLoader,
         binarize_threshold = 0.5,
-        flip_gauge = False
+        flip_gauge = False,
+        device = None,
 ):          
     """
     Calculates the activation frequencies of bottleneck neurons in an autoencoder model.
@@ -413,7 +415,7 @@ def compute_bottleneck_neurons_activ_freq(
     """
     
     if binarize_threshold is None:
-        emp_states_dict = compute_sampled_emp_states_dict(model, dataloader)
+        emp_states_dict = compute_sampled_emp_states_dict(model, dataloader, device=device)
     else:
         emp_states_dict = compute_emp_states_dict(model, dataloader, binarize_threshold)
 
@@ -461,7 +463,9 @@ def calc_hfm_kld_with_optimal_g(            # used in compute_klds_gs_lst_with_f
         data_loader: DataLoader,
         return_g = False,
         binarize_threshold = 0.5,
-        hfm_distribution = 'pure'):   
+        hfm_distribution = 'pure',
+        save_permutations = False,
+        model_kwargs = {}):   
     """
     Calculates the KL divergence between the empirical latent state distribution (from the model and data_loader)
     and the HFM model with its optimal parameter g (chosen to best match the empirical mean).
@@ -479,7 +483,16 @@ def calc_hfm_kld_with_optimal_g(            # used in compute_klds_gs_lst_with_f
 
     if IS_TEST_MODE:
         print(f"Calculating emp_states_dict_gauged")
-    emp_states_dict_gauged = compute_emp_states_dict_gauged(model, data_loader, binarize_threshold=binarize_threshold, hfm_distribution=hfm_distribution)
+
+    if save_permutations:
+        emp_states_dict_gauged, gauge_perm = compute_emp_states_dict_gauged(model, data_loader, binarize_threshold=binarize_threshold, hfm_distribution=hfm_distribution, return_perm=True, model_kwargs=model_kwargs)
+        perm_save_dir = os.path.join(project_root, "gauges", "permutations", model_kwargs['output_activation_encoder_path'], model_kwargs['output_activation_decoder_path'], str(model_kwargs['latent_dim']), model_kwargs['dataset'], f"perm_{model_kwargs['num_hidden_layers']}hl.txt")
+        os.makedirs(os.path.dirname(perm_save_dir), exist_ok=True)
+        train_num = model_kwargs.get('train_num', 'unknown')
+        with open(perm_save_dir, 'a') as f:
+            f.write(f"{train_num}\t{gauge_perm}\n")
+    else:
+        emp_states_dict_gauged = compute_emp_states_dict_gauged(model, data_loader, binarize_threshold=binarize_threshold, hfm_distribution=hfm_distribution)
 
     if IS_TEST_MODE:
         print(f"Calculating optimal g and KL divergence")
@@ -533,7 +546,8 @@ def compute_emp_states_dict_gauged(                 # USED IN calc_hfm_kld_with_
         hfm_distribution = 'pure',
         brute_force = False,
         return_perm = False,
-        verbose = False
+        verbose = False,
+        model_kwargs = None
     ):
     """
     Computes the empirical latent state distribution from a model and dataloader, applies gauge flipping
@@ -558,12 +572,12 @@ def compute_emp_states_dict_gauged(                 # USED IN calc_hfm_kld_with_
     if IS_TEST_MODE:
         print(f"Computing emp_states_dict")    
     if binarize_threshold is None:
-        emp_states_dict = compute_sampled_emp_states_dict(model, data_loader, num_samples=5)
+        emp_states_dict = compute_sampled_emp_states_dict(model, data_loader, num_samples=5, device=model_kwargs.get('device', None))
     else:
         emp_states_dict = compute_emp_states_dict(model, data_loader, binarize_threshold)
 
     if flip_gauge:
-        emp_states_dict = flip_gauge_bits(emp_states_dict)
+        emp_states_dict = flip_gauge_bits(emp_states_dict, save_flip_gauge=return_perm, model_kwargs=model_kwargs)
 
     if brute_force:
         gauge_perm = compute_perm_minimizing_hfm_kld_brute_force(emp_states_dict, verbose=verbose)
@@ -833,7 +847,7 @@ def complementary_average_ms(emp_states_dict_gauged, g):
 
 
 
-def flip_gauge_bits(emp_states_dict):                       # USED IN compute_emp_states_dict_gauged
+def flip_gauge_bits(emp_states_dict, save_flip_gauge=False, model_kwargs=None):                       # USED IN compute_emp_states_dict_gauged
     """
     Flip specific bits in all states based on the activated bits in the most frequent state.
 
@@ -846,6 +860,13 @@ def flip_gauge_bits(emp_states_dict):                       # USED IN compute_em
     """
 
     most_frequent_state = max(emp_states_dict.items(), key=lambda x: x[1])[0]
+
+    if save_flip_gauge and model_kwargs is not None:
+        flip_save_dir = os.path.join(project_root, "gauges", "flip", model_kwargs['output_activation_encoder_path'], model_kwargs['output_activation_decoder_path'], str(model_kwargs['latent_dim']), model_kwargs['dataset'], f"flipg_{model_kwargs['num_hidden_layers']}hl.txt")
+        os.makedirs(os.path.dirname(flip_save_dir), exist_ok=True)
+        train_num = model_kwargs.get('train_num', 'unknown')
+        with open(flip_save_dir, 'a') as f:
+            f.write(f"{train_num}\t{[int(x) for x in most_frequent_state]}\n")
 
     bits_to_flip = [i for i, bit in enumerate(most_frequent_state) if bit == 1]
 

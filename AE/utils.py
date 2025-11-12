@@ -5,12 +5,30 @@ import torch.nn.functional as F
 import numpy as np
 import math
 from collections import Counter
+from AE.models import AE_0
+import os
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+
+
+def load_model(model_kwargs, device):
+    my_model = AE_0(
+        model_kwargs['input_dim'],
+        model_kwargs['latent_dim'],
+        decrease_rate=model_kwargs['decrease_rate'],
+        hidden_layers=model_kwargs['num_hidden_layers'],
+        output_activation_encoder=model_kwargs['output_activation_encoder'],
+        output_activation_decoder=model_kwargs['output_activation_decoder'],
+        recursive_last_layer=model_kwargs.get('recursive_last_layer', False)
+    ).to(device)
+    #model_path = f"../models/{model_path_kwargs['output_activation_encoder']}/{model_path_kwargs['train_type']}/{model_path_kwargs['latent_dim']}/{model_path_kwargs['dataset']}/dr{model_path_kwargs['decrease_rate']}_{model_path_kwargs['num_hidden_layers']}hl_{model_path_kwargs['train_num']}.pth"
+    model_path = os.path.join(project_root, "models", "recursive", f"lm_lmb_{model_kwargs['lm_lmb']}",f"{model_kwargs['latent_dim']}ld", f"{model_kwargs['dataset']}", f"dr{model_kwargs['decrease_rate']}_{model_kwargs['num_hidden_layers']}hl_{model_kwargs['train_num']}.pth")
+    #recursive/lm_lmb_{model_path_kwargs['lm_lmb']}/{model_path_kwargs['dataset']}
+    my_model.load_state_dict(torch.load(model_path, map_location=device))
+    return my_model
 
 
 
-
-
-def compute_sampled_emp_states_dict(model, dataloader, num_samples=10, verbose=False):
+def compute_sampled_emp_states_dict(model, dataloader, num_samples=10, verbose=False, device=None):           # USED IN DEPTH.UTILS
     """
     Samples binary internal representations from the autoencoder's latent probabilities.
 
@@ -24,7 +42,6 @@ def compute_sampled_emp_states_dict(model, dataloader, num_samples=10, verbose=F
         dict: Dictionary where keys are binary state tuples and values are frequencies
     """
     model.eval()
-    device = model.device
     state_counts = defaultdict(int)
     total_samples = 0
 
