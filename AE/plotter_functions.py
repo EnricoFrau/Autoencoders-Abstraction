@@ -1,3 +1,4 @@
+
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
@@ -298,12 +299,16 @@ def visualize_gauged_bottleneck_neurons(model, device, base_vector, img_shape=(2
         for i in range(latent_dim):
             flipped = base_vector.clone()
             flipped[0, i] = 1.0 - flipped[0, i]  # flip bit
-            decoded = model.decode(flipped).cpu().view(*img_shape)
+            #decoded = model.decode(flipped).cpu().view(*img_shape)
+
+            decoded_full = model.decode(flipped).cpu()
+        # Only use the first 784 outputs
+            decoded = decoded_full[:, :np.prod(img_shape)].view(-1, *img_shape)
             ax = axes[i]
             if EMNIST:
                 decoded = np.rot90(decoded, k=1)
                 decoded = np.flipud(decoded)
-            ax.imshow(decoded, cmap='gray')
+            ax.imshow(decoded.squeeze(), cmap='gray')
             ax.set_title(f'Flip neuron {i+1}')
             ax.axis('off')
         # Hide unused subplots

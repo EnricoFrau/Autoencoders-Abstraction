@@ -10,7 +10,7 @@ import os
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 
 
-def load_model(model_kwargs, device):
+def load_model(model_kwargs, device, print_result=False):
     my_model = AE_0(
         model_kwargs['input_dim'],
         model_kwargs['latent_dim'],
@@ -24,6 +24,8 @@ def load_model(model_kwargs, device):
     model_path = os.path.join(project_root, "models", "recursive", f"lm_lmb_{model_kwargs['lm_lmb']}",f"{model_kwargs['latent_dim']}ld", f"{model_kwargs['dataset']}", f"dr{model_kwargs['decrease_rate']}_{model_kwargs['num_hidden_layers']}hl_{model_kwargs['train_num']}.pth")
     #recursive/lm_lmb_{model_path_kwargs['lm_lmb']}/{model_path_kwargs['dataset']}
     my_model.load_state_dict(torch.load(model_path, map_location=device))
+    if print_result:
+        print(f"Model loaded from {model_path}")
     return my_model
 
 
