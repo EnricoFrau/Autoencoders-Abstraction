@@ -18,11 +18,11 @@ def load_model(model_kwargs, device, print_result=False):
         hidden_layers=model_kwargs['num_hidden_layers'],
         output_activation_encoder=model_kwargs['output_activation_encoder'],
         output_activation_decoder=model_kwargs['output_activation_decoder'],
-        recursive_last_layer=model_kwargs.get('recursive_last_layer', False)
+        recursive_last_layer=model_kwargs.get('recursive_last_layer', False),
+        quantize_latent=model_kwargs.get('quantize_latent', False),
     ).to(device)
-    #model_path = f"../models/{model_path_kwargs['output_activation_encoder']}/{model_path_kwargs['train_type']}/{model_path_kwargs['latent_dim']}/{model_path_kwargs['dataset']}/dr{model_path_kwargs['decrease_rate']}_{model_path_kwargs['num_hidden_layers']}hl_{model_path_kwargs['train_num']}.pth"
-    model_path = os.path.join(project_root, "models", "recursive", f"lm_lmb_{model_kwargs['lm_lmb']}",f"{model_kwargs['latent_dim']}ld", f"{model_kwargs['dataset']}", f"dr{model_kwargs['decrease_rate']}_{model_kwargs['num_hidden_layers']}hl_{model_kwargs['train_num']}.pth")
-    #recursive/lm_lmb_{model_path_kwargs['lm_lmb']}/{model_path_kwargs['dataset']}
+    #model_path = os.path.join(project_root, "models", "recursive", f"lm_lmb_{model_kwargs['lm_lmb']}",f"{model_kwargs['latent_dim']}ld", f"{model_kwargs['dataset']}", f"dr{model_kwargs['decrease_rate']}_{model_kwargs['num_hidden_layers']}hl_{model_kwargs['train_num']}.pth")
+    model_path = os.path.join(project_root, "models", "quantized",f"{model_kwargs['latent_dim']}ld", f"{model_kwargs['dataset']}", f"dr{model_kwargs['decrease_rate']}_{model_kwargs['num_hidden_layers']}hl_{model_kwargs['train_num']}.pth")
     my_model.load_state_dict(torch.load(model_path, map_location=device))
     if print_result:
         print(f"Model loaded from {model_path}")

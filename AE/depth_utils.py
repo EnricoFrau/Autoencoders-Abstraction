@@ -185,13 +185,13 @@ def calc_hfm_kld_with_optimal_g(            # used in compute_klds_gs_lst_with_f
 
     if save_permutations:
         emp_states_dict_gauged, gauge_perm = compute_emp_states_dict_gauged(model, data_loader, binarize_threshold=binarize_threshold, hfm_distribution=hfm_distribution, return_perm=True, model_kwargs=model_kwargs)
-        perm_save_dir = os.path.join(project_root, "gauges", "permutations", model_kwargs['output_activation_encoder_path'], model_kwargs['output_activation_decoder_path'],str(model_kwargs['latent_dim']), model_kwargs['dataset'], model_kwargs['lm_lmb'], ++f"perm_{model_kwargs['num_hidden_layers']}hl.txt")
+        perm_save_dir = os.path.join(project_root, "gauges", "permutations", model_kwargs['quantize_latent_path'], str(model_kwargs['latent_dim'])+"ld", model_kwargs['dataset'], f"perm_{model_kwargs['num_hidden_layers']}hl.txt")
         os.makedirs(os.path.dirname(perm_save_dir), exist_ok=True)
         train_num = model_kwargs.get('train_num', 'unknown')
         with open(perm_save_dir, 'a') as f:
             f.write(f"{train_num}\t{gauge_perm}\n")
     else:
-        emp_states_dict_gauged = compute_emp_states_dict_gauged(model, data_loader, binarize_threshold=binarize_threshold, hfm_distribution=hfm_distribution)
+        emp_states_dict_gauged = compute_emp_states_dict_gauged(model, data_loader, binarize_threshold=binarize_threshold, hfm_distribution=hfm_distribution, model_kwargs=model_kwargs)
 
     if IS_TEST_MODE:
         print(f"Calculating optimal g and KL divergence")
@@ -252,7 +252,11 @@ def compute_emp_states_dict_gauged(                 # USED IN calc_hfm_kld_with_
     if IS_TEST_MODE:
         print(f"Computing emp_states_dict")    
     if binarize_threshold is None:
-        emp_states_dict = compute_sampled_emp_states_dict(model, data_loader, num_samples=5, device=model_kwargs.get('device', None))
+        if model_kwargs.get('quantize_latent', False):
+            num_samples = 1
+        else:
+            num_samples = 5
+        emp_states_dict = compute_sampled_emp_states_dict(model, data_loader, num_samples=num_samples, device=model_kwargs.get('device', None))
     else:
         emp_states_dict = compute_emp_states_dict(model, data_loader, binarize_threshold)
 
@@ -356,7 +360,7 @@ def flip_gauge_bits(emp_states_dict, save_flip_gauge=False, model_kwargs=None): 
     most_frequent_state = max(emp_states_dict.items(), key=lambda x: x[1])[0]
 
     if save_flip_gauge and model_kwargs is not None:
-        flip_save_dir = os.path.join(project_root, "gauges", "flip", model_kwargs['output_activation_encoder_path'], model_kwargs['output_activation_decoder_path'], str(model_kwargs['latent_dim']), model_kwargs['dataset'], model_kwargs['lm_lmb'], f"flipg_{model_kwargs['num_hidden_layers']}hl.txt")
+        flip_save_dir = os.path.join(project_root, "gauges", "flip", model_kwargs['quantize_latent_path'], str(model_kwargs['latent_dim']) + "ld", model_kwargs['dataset'], f"flipg_{model_kwargs['num_hidden_layers']}hl.txt")
         os.makedirs(os.path.dirname(flip_save_dir), exist_ok=True)
         train_num = model_kwargs.get('train_num', 'unknown')
         with open(flip_save_dir, 'a') as f:

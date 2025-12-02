@@ -17,6 +17,7 @@ class AE_0(nn.Module):
         he_init=False,
         set_bias=None,
         recursive_last_layer=False,
+        quantize_latent=False,
     ):
         super().__init__()
 
@@ -24,6 +25,8 @@ class AE_0(nn.Module):
         self.latent_dim = latent_dim
         self.number_of_hidden_layers = hidden_layers
         self.activation_fn = activation_fn
+        self.recursive_last_layer = recursive_last_layer
+        self.quantize_latent = quantize_latent
 
         encoder_neurons_sizes = [input_dim]
 
@@ -137,7 +140,13 @@ class AE_0(nn.Module):
             data_flat = data.view(-1, self.input_dim)  # data_flat has size (batch_size(64), 28, 28)
         else:
             data_flat = data
-        return self.encoder(data_flat)
+            
+        encoded_data = self.encoder(data_flat)
+
+        if self.quantize_latent:
+            encoded_data = BinarySTE.apply(encoded_data)
+        
+        return encoded_data
     
 
 
@@ -146,13 +155,24 @@ class AE_0(nn.Module):
 
 
 
-    def forward(self, data): # batch has size (batch_size(64), 28, 28)
-        original_shape = data.shape
-        decoded = self.decode(self.encode(data))
-        # Reshape decoded output back to original input shape
-        if original_shape != decoded.shape:
-            decoded = decoded.view(original_shape)
-        return decoded
+    # def forward(self, data): # batch has size (batch_size(64), 28, 28)
+    #     original_shape = data.shape
+    #     decoded = self.decode(self.encode(data))
+    #     # Reshape decoded output back to original input shape
+    #     if original_shape != decoded.shape:
+    #         decoded = decoded.view(original_shape)
+    #     return decoded
+    
+    def forward(self, data):
+        # If input is already flat, don't reshape output
+        if data.dim() == 2 and data.shape[1] == self.input_dim:
+            return self.decode(self.encode(data))
+        else:
+            original_shape = data.shape
+            decoded = self.decode(self.encode(data))
+            if original_shape != decoded.shape:
+                decoded = decoded.view(original_shape)
+            return decoded
 
 
 
@@ -176,6 +196,23 @@ class AE_0(nn.Module):
 
 
     
+
+class BinarySTE(torch.autograd.Function):
+    """
+    Straight-Through Estimator for binary quantization.
+    Forward: binarize to {0, 1}
+    Backward: pass gradients through unchanged
+    """
+    @staticmethod
+    def forward(ctx, input):
+        # Binarize: values >= 0.5 -> 1, else -> 0
+        return (input >= 0.5).float()
+    
+    @staticmethod
+    def backward(ctx, grad_output):
+        # Straight-through: gradient passes unchanged
+        return grad_output
+
 
 
 

@@ -104,57 +104,104 @@ def visualize_decoded_from_latent(
 
 
 
-
-
 def plot_original_vs_decoded(model, data_loader, device, num_samples=5, EMNIST=False):
     """
     Samples images from the dataset, encodes and decodes them, and plots original vs decoded images side by side.
+    Handles recursive AE_0 models where decoded output may be larger than input_dim.
     """
 
-    # Get a batch of images from the validation loader
     images, labels = next(iter(data_loader))
     images = images.to(device)
 
-    # Select random indices to visualize
     indices = torch.randint(0, images.size(0), (num_samples,))
 
     plt.figure(figsize=(num_samples * 4, 4))
     for i, idx in enumerate(indices):
         img = images[idx].unsqueeze(0)
-        # Flatten and encode
         with torch.no_grad():
             latent = model.encode(img.view(1, -1))
             decoded = model.decode(latent)
-        decoded_img = decoded.cpu().numpy().reshape(img.shape[1:])
+        # Handle recursive AE_0 output shape
+        decoded_np = decoded.cpu().numpy()
+        if decoded_np.shape[1] > np.prod(img.shape[1:]):
+            decoded_img = decoded_np[0, :np.prod(img.shape[1:])].reshape(img.shape[1:])
+        else:
+            decoded_img = decoded_np.reshape(img.shape[1:])
 
         # Plot original
         plt.subplot(2, num_samples, i + 1)
-
-        img = images[idx].cpu().squeeze().numpy()
-        if EMNIST == True:
-            img = np.rot90(img, k=1)  # Rotate 90 degrees counterclockwise
-            img = np.flipud(img)  # Flip upside down (mirror vertically)
-        plt.imshow(img, cmap="gray")
-
+        img_np = images[idx].cpu().squeeze().numpy()
+        if EMNIST:
+            img_np = np.rot90(img_np, k=1)
+            img_np = np.flipud(img_np)
+        plt.imshow(img_np, cmap="gray")
         plt.title(f"Original idx={idx.item()}")
         plt.axis("off")
 
         # Plot decoded
         plt.subplot(2, num_samples, num_samples + i + 1)
-
         decoded_img = decoded_img.squeeze()
-        if EMNIST == True:
-            decoded_img = np.rot90(
-                decoded_img, k=1
-            )  # Rotate 90 degrees counterclockwise
-            decoded_img = np.flipud(decoded_img)  # Flip upside down (mirror vertically)
-
+        if EMNIST:
+            decoded_img = np.rot90(decoded_img, k=1)
+            decoded_img = np.flipud(decoded_img)
         plt.imshow(decoded_img, cmap="gray")
         plt.title("Decoded")
         plt.axis("off")
 
     plt.tight_layout()
     plt.show()
+
+
+
+# def plot_original_vs_decoded(model, data_loader, device, num_samples=5, EMNIST=False):
+#     """
+#     Samples images from the dataset, encodes and decodes them, and plots original vs decoded images side by side.
+#     """
+
+#     # Get a batch of images from the validation loader
+#     images, labels = next(iter(data_loader))
+#     images = images.to(device)
+
+#     # Select random indices to visualize
+#     indices = torch.randint(0, images.size(0), (num_samples,))
+
+#     plt.figure(figsize=(num_samples * 4, 4))
+#     for i, idx in enumerate(indices):
+#         img = images[idx].unsqueeze(0)
+#         # Flatten and encode
+#         with torch.no_grad():
+#             latent = model.encode(img.view(1, -1))
+#             decoded = model.decode(latent)
+#         decoded_img = decoded.cpu().numpy().reshape(img.shape[1:])
+
+#         # Plot original
+#         plt.subplot(2, num_samples, i + 1)
+
+#         img = images[idx].cpu().squeeze().numpy()
+#         if EMNIST == True:
+#             img = np.rot90(img, k=1)  # Rotate 90 degrees counterclockwise
+#             img = np.flipud(img)  # Flip upside down (mirror vertically)
+#         plt.imshow(img, cmap="gray")
+
+#         plt.title(f"Original idx={idx.item()}")
+#         plt.axis("off")
+
+#         # Plot decoded
+#         plt.subplot(2, num_samples, num_samples + i + 1)
+
+#         decoded_img = decoded_img.squeeze()
+#         if EMNIST == True:
+#             decoded_img = np.rot90(
+#                 decoded_img, k=1
+#             )  # Rotate 90 degrees counterclockwise
+#             decoded_img = np.flipud(decoded_img)  # Flip upside down (mirror vertically)
+
+#         plt.imshow(decoded_img, cmap="gray")
+#         plt.title("Decoded")
+#         plt.axis("off")
+
+#     plt.tight_layout()
+#     plt.show()
 
 
 
@@ -267,9 +314,65 @@ def visualize_bottleneck_neurons(model, device, img_shape=(28, 28), save_dir = N
         plt.show()
 
 
-def visualize_gauged_bottleneck_neurons(model, device, base_vector, img_shape=(28, 28), save_dir=None, file_name=None, EMNIST=False):
+# def visualize_gauged_bottleneck_neurons(model, device, base_vector, img_shape=(28, 28), save_dir=None, file_name=None, EMNIST=False):
+#     """
+#     Visualize the effect of flipping each neuron in a binary bottleneck vector.
+
+#     Args:
+#         model: Trained autoencoder model with a .decode() method.
+#         device: Device to run computations on.
+#         base_vector: 1D numpy or torch tensor of zeros and ones, length = model.latent_dim.
+#         img_shape: Shape to reshape the decoded output (default: (28, 28)).
+#         save_dir: Directory to save the figure (optional).
+#         file_name: Name of the file to save (optional).
+#         EMNIST: If True, rotate and flip images for EMNIST.
+#     """
+#     import torch
+#     import numpy as np
+#     import matplotlib.pyplot as plt
+
+#     model.eval()
+#     latent_dim = model.latent_dim
+#     base_vector = torch.tensor(base_vector, dtype=torch.float32, device=device)
+#     if base_vector.dim() == 1:
+#         base_vector = base_vector.unsqueeze(0)  # shape [1, latent_dim]
+
+#     n_cols = (latent_dim + 1) // 2
+#     n_rows = 2
+
+#     with torch.no_grad():
+#         fig, axes = plt.subplots(n_rows, n_cols, figsize=(2.5 * n_cols, 5))
+#         axes = axes.flatten()
+#         for i in range(latent_dim):
+#             flipped = base_vector.clone()
+#             flipped[0, i] = 1.0 - flipped[0, i]  # flip bit
+#             #decoded = model.decode(flipped).cpu().view(*img_shape)
+
+#             decoded_full = model.decode(flipped).cpu()
+#         # Only use the first 784 outputs
+#             decoded = decoded_full[:, :np.prod(img_shape)].view(-1, *img_shape)
+#             ax = axes[i]
+#             if EMNIST:
+#                 decoded = decoded.cpu().numpy()
+#                 decoded = np.rot90(decoded, k=1)
+#                 decoded = np.flipud(decoded)
+#             ax.imshow(decoded.squeeze(), cmap='gray')
+#             ax.set_title(f'Flip neuron {i+1}')
+#             ax.axis('off')
+#         # Hide unused subplots
+#         for j in range(latent_dim, n_rows * n_cols):
+#             axes[j].axis('off')
+#         plt.tight_layout()
+
+#         save_fig(save_dir, file_name)
+#         plt.show()
+
+
+def visualize_gauged_bottleneck_neurons(
+    model, device, base_vector, perm_vector=None, img_shape=(28, 28), save_dir=None, file_name=None, EMNIST=False
+):
     """
-    Visualize the effect of flipping each neuron in a binary bottleneck vector.
+    Visualize the effect of flipping each neuron in a binary bottleneck vector, in the order specified by perm_vector.
 
     Args:
         model: Trained autoencoder model with a .decode() method.
@@ -279,6 +382,7 @@ def visualize_gauged_bottleneck_neurons(model, device, base_vector, img_shape=(2
         save_dir: Directory to save the figure (optional).
         file_name: Name of the file to save (optional).
         EMNIST: If True, rotate and flip images for EMNIST.
+        perm_vector: List of indices specifying the order to plot neurons.
     """
     import torch
     import numpy as np
@@ -290,29 +394,31 @@ def visualize_gauged_bottleneck_neurons(model, device, base_vector, img_shape=(2
     if base_vector.dim() == 1:
         base_vector = base_vector.unsqueeze(0)  # shape [1, latent_dim]
 
+    # Use perm_vector if provided, otherwise default to range(latent_dim)
+    neuron_order = perm_vector if perm_vector is not None else list(range(latent_dim))
+
     n_cols = (latent_dim + 1) // 2
     n_rows = 2
 
     with torch.no_grad():
         fig, axes = plt.subplots(n_rows, n_cols, figsize=(2.5 * n_cols, 5))
         axes = axes.flatten()
-        for i in range(latent_dim):
+        for plot_idx, neuron_idx in enumerate(neuron_order):
             flipped = base_vector.clone()
-            flipped[0, i] = 1.0 - flipped[0, i]  # flip bit
-            #decoded = model.decode(flipped).cpu().view(*img_shape)
+            flipped[0, neuron_idx] = 1.0 - flipped[0, neuron_idx]  # flip bit
 
             decoded_full = model.decode(flipped).cpu()
-        # Only use the first 784 outputs
             decoded = decoded_full[:, :np.prod(img_shape)].view(-1, *img_shape)
-            ax = axes[i]
+            ax = axes[plot_idx]
+            img_to_plot = decoded.squeeze().cpu().numpy()
             if EMNIST:
-                decoded = np.rot90(decoded, k=1)
-                decoded = np.flipud(decoded)
-            ax.imshow(decoded.squeeze(), cmap='gray')
-            ax.set_title(f'Flip neuron {i+1}')
+                img_to_plot = np.rot90(img_to_plot, k=1)
+                img_to_plot = np.flipud(img_to_plot)
+            ax.imshow(img_to_plot, cmap='gray')
+            ax.set_title(f'Flip neuron {neuron_idx+1}')
             ax.axis('off')
         # Hide unused subplots
-        for j in range(latent_dim, n_rows * n_cols):
+        for j in range(len(neuron_order), n_rows * n_cols):
             axes[j].axis('off')
         plt.tight_layout()
 
@@ -444,6 +550,58 @@ def datasets_dicts_comparison(klds_dict, save_dir = None):                      
 
 
 
+# def datasets_dicts_comparison_colored(
+#     klds_dict, gs_dict, save_dir=None, title=None
+# ):
+#     """
+#     Plots KL values for each dataset in klds_dict on the same graph.
+#     Uses gs_dict for coloring the points and the line.
+#     Each key is distinguished by marker style (empty marker).
+#     Line color varies continuously along the plot according to gs_dict.
+#     """
+#     import itertools
+#     from matplotlib.collections import LineCollection
+#     import matplotlib as mpl
+
+#     plt.figure(figsize=(8, 5))
+#     markers = ['o', 's', 'D', '^', 'v', 'P', '*', 'X', '<', '>']
+#     marker_cycle = itertools.cycle(markers)
+#     cmap = plt.get_cmap('inferno')
+
+#     for key in klds_dict.keys():
+#         values_1 = np.array(klds_dict[key])
+#         values_2 = np.array(gs_dict[key])
+#         x = np.arange(1, len(values_1) + 1)
+#         marker = next(marker_cycle)
+
+#         # Scatter with empty markers
+#         scatter = plt.scatter(
+#             x, values_1, c=values_2, cmap=cmap, s=50, marker=marker,
+#             edgecolors='black', facecolors='white', label=key, linewidths=0.5
+#         )
+
+#         # Line color varies along gs_dict
+#         points = np.array([x, values_1]).T.reshape(-1, 1, 2)
+#         segments = np.concatenate([points[:-1], points[1:]], axis=1)
+#         norm = mpl.colors.Normalize(vmin=values_2.min(), vmax=values_2.max())
+#         lc = LineCollection(segments, cmap=cmap, norm=norm)
+#         lc.set_array(values_2[:-1])
+#         lc.set_linewidth(0.8)
+#         lc.set_linestyle("--")
+#         plt.gca().add_collection(lc)
+
+#     plt.xlabel("Number of hidden layers")
+#     plt.ylabel("Dkl with HFM")
+#     plt.title(title)
+#     plt.legend()
+#     plt.grid(True)
+#     plt.colorbar(scatter, label="gs", cmap=cmap)
+
+#     save_fig(save_dir, "comparison.png")
+#     plt.show()
+
+
+
 def datasets_dicts_comparison_colored(
     klds_dict, gs_dict, save_dir=None, title=None
 ):
@@ -462,6 +620,12 @@ def datasets_dicts_comparison_colored(
     marker_cycle = itertools.cycle(markers)
     cmap = plt.get_cmap('inferno')
 
+    # Calculate global min/max for gs values across all datasets
+    all_gs_values = np.concatenate([np.array(gs_dict[key]) for key in gs_dict.keys()])
+    global_vmin = all_gs_values.min()
+    global_vmax = all_gs_values.max()
+    norm = mpl.colors.Normalize(vmin=global_vmin, vmax=global_vmax)
+
     for key in klds_dict.keys():
         values_1 = np.array(klds_dict[key])
         values_2 = np.array(gs_dict[key])
@@ -470,14 +634,13 @@ def datasets_dicts_comparison_colored(
 
         # Scatter with empty markers
         scatter = plt.scatter(
-            x, values_1, c=values_2, cmap=cmap, s=50, marker=marker,
+            x, values_1, c=values_2, cmap=cmap, norm=norm, s=50, marker=marker,
             edgecolors='black', facecolors='white', label=key, linewidths=0.5
         )
 
         # Line color varies along gs_dict
         points = np.array([x, values_1]).T.reshape(-1, 1, 2)
         segments = np.concatenate([points[:-1], points[1:]], axis=1)
-        norm = mpl.colors.Normalize(vmin=values_2.min(), vmax=values_2.max())
         lc = LineCollection(segments, cmap=cmap, norm=norm)
         lc.set_array(values_2[:-1])
         lc.set_linewidth(0.8)
@@ -493,7 +656,6 @@ def datasets_dicts_comparison_colored(
 
     save_fig(save_dir, "comparison.png")
     plt.show()
-
 
 
 def analyze_binary_frequencies(frequency_dict, top_k=10):
