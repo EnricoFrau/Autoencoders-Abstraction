@@ -185,7 +185,7 @@ def calc_hfm_kld_with_optimal_g(            # used in compute_klds_gs_lst_with_f
 
     if save_permutations:
         emp_states_dict_gauged, gauge_perm = compute_emp_states_dict_gauged(model, data_loader, binarize_threshold=binarize_threshold, hfm_distribution=hfm_distribution, return_perm=True, model_kwargs=model_kwargs)
-        perm_save_dir = os.path.join(project_root, "gauges", "permutations", model_kwargs['quantize_latent_path'], str(model_kwargs['latent_dim'])+"ld", model_kwargs['dataset'], f"perm_{model_kwargs['num_hidden_layers']}hl.txt")
+        perm_save_dir = os.path.join(project_root, "gauges", "permutations", 'zoom_in', str(model_kwargs['latent_dim'])+"ld", model_kwargs['dataset'], f"dataset_iteration{model_kwargs['iteration']}", f"perm_{model_kwargs['num_hidden_layers']}hl.txt")
         os.makedirs(os.path.dirname(perm_save_dir), exist_ok=True)
         train_num = model_kwargs.get('train_num', 'unknown')
         with open(perm_save_dir, 'a') as f:
@@ -360,7 +360,7 @@ def flip_gauge_bits(emp_states_dict, save_flip_gauge=False, model_kwargs=None): 
     most_frequent_state = max(emp_states_dict.items(), key=lambda x: x[1])[0]
 
     if save_flip_gauge and model_kwargs is not None:
-        flip_save_dir = os.path.join(project_root, "gauges", "flip", model_kwargs['quantize_latent_path'], str(model_kwargs['latent_dim']) + "ld", model_kwargs['dataset'], f"flipg_{model_kwargs['num_hidden_layers']}hl.txt")
+        flip_save_dir = os.path.join(project_root, "gauges", "flip", 'zoom_in', str(model_kwargs['latent_dim']) + "ld", model_kwargs['dataset'], f"dataset_iteration{model_kwargs['iteration']}", f"flipg_{model_kwargs['num_hidden_layers']}hl.txt")
         os.makedirs(os.path.dirname(flip_save_dir), exist_ok=True)
         train_num = model_kwargs.get('train_num', 'unknown')
         with open(flip_save_dir, 'a') as f:
@@ -438,8 +438,8 @@ def compute_perm_minimizing_hfm_kld_simul_anneal(
     emp_states_dict: dict,
     g = np.log(2),
     initial_temp = 10.0,
-    cooling_rate = 0.95,
-    n_iterations = 5000,
+    cooling_rate = 0.97,
+    n_iterations = 150000,
     hfm_distribution = 'pure',
     verbose = False
 ):
@@ -507,6 +507,7 @@ def compute_perm_minimizing_hfm_kld_simul_anneal(
             )
 
     return best_perm
+
 
 
 

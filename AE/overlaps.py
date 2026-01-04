@@ -2,6 +2,7 @@ import numpy as np
 import pickle
 import torch
 import torch.nn as nn
+import os, sys
 from AE.models import AE_0
 from torchvision import datasets, transforms
 from AE.datasets import MNISTDigit2OnlyDataset, MNISTDigit2Dataset, FEMNISTDataset
@@ -9,6 +10,7 @@ from AE.utils import load_model
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.special import rel_entr
+from AE.utils import load_model
 
 IS_TEST_MODE = False
 
@@ -56,7 +58,7 @@ def get_datapoints_labels_arrays(dataset_name, train=True):
 
 
 
-def compute_rep_hl_datapoints_labels_freq(dataset, ld, datapoints_array, labels_array, device, return_distances = False, save_dir=None):
+def compute_rep_hl_datapoints_labels_freq(datapoints_array, model_kwargs, labels_array, repetitions_range, num_hidden_layers_range,return_distances = False, save_dir=None):
     """
     Computes the frequency arrays for datapoints and labels being the closest to decoded binary latent vectors
     across multiple repetitions and hidden layer configurations.
@@ -69,6 +71,7 @@ def compute_rep_hl_datapoints_labels_freq(dataset, ld, datapoints_array, labels_
         dataset (str): Name of the dataset.
         ld (int): Latent dimension.
         datapoints_array (np.ndarray): Array of shape (n_datapoints, input_dim), containing datapoints.
+        model_kwargs (dict): Dictionary of model initialization parameters.
         labels_array (np.ndarray): Array of shape (n_datapoints,), containing labels for each datapoint.
         device (torch.device): Device to run the model on.
         return_distances (bool, optional): If True, also returns the array of minimum distances.
@@ -81,44 +84,40 @@ def compute_rep_hl_datapoints_labels_freq(dataset, ld, datapoints_array, labels_
             - np.ndarray (optional): Array of shape (n_repetitions, n_hidden_layers, 2**latent_dim) with minimum distances for each decoded vector.
     """
 
-    model_kwargs = {
-        'input_dim': 28*28,
-        'latent_dim': ld,
-        'decrease_rate': 0.6,
-        'device': device,
-        'output_activation_encoder': nn.Sigmoid
-    }
-    model_path_kwargs = {
-        'output_activation_encoder': 'sigmoid output',
-        'train_type': 'simultaneous train',
-        'latent_dim': f"{model_kwargs['latent_dim']}ld",
-        'decrease_rate': '06',
-        'learning_rate': '1e3',
-        'train_num': 0,
-    }
-    model_path_kwargs['dataset'] = dataset
 
+    # model_kwargs = {
+    #     'input_dim': 28*28,
+    #     'latent_dim': ld,
+    #     'decrease_rate': 0.6,
+    #     'device': device,
+    #     'output_activation_encoder': nn.Sigmoid
+    # }
+    # model_path_kwargs = {
+    #     'output_activation_encoder': 'sigmoid output',
+    #     'train_type': 'simultaneous train',
+    #     'latent_dim': f"{model_kwargs['latent_dim']}ld",
+    #     'decrease_rate': '06',
+    #     'learning_rate': '1e3',
+    #     'train_num': 0,
+    # }
+    # model_path_kwargs['dataset'] = dataset
 
-    repetitions = range(6)
-    hidden_layers = range(1, 8)
 
     datapoints_freq_list = []
     labels_freq_list = []
     distances_list = []
 
-    for repetition in repetitions:
+    for repetition in repetitions_range:
+        model_kwargs['train_num'] = repetition
         datapoints_freq_hl = []
         labels_freq_hl = []
         distances_hl = []
 
-        for num_hidden_layers in hidden_layers:
-            model_kwargs['hidden_layers'] = num_hidden_layers
-            model_path_kwargs['num_hidden_layers'] = num_hidden_layers
-            model_path_kwargs['train_num'] = repetition
-
+        for num_hidden_layers in num_hidden_layers_range:
+            model_kwargs['num_hidden_layers'] = num_hidden_layers
 
             datapoints_frequencies, labels_frequencies, distances = compute_min_distances_frequencies(
-                model_path_kwargs, model_kwargs, datapoints_array, labels_array, return_distances=True
+                model_kwargs, datapoints_array, labels_array, return_distances=True
             )
 
             datapoints_freq_hl.append(datapoints_frequencies)
@@ -139,10 +138,12 @@ def compute_rep_hl_datapoints_labels_freq(dataset, ld, datapoints_array, labels_
     repetitions_hl_distances_array = np.array(distances_list)
 
     if save_dir is not None:
-        with open(f"{save_dir}/datapoints_freq_list_{dataset}_{ld}ld.pkl", "wb") as f:
+        with open(os.path.join(f"{save_dir}/rep_hl_datapoints_freq.pkl"), "wb") as f:
             pickle.dump(repetitions_hl_datapoints_freq_array, f)
-        with open(f"{save_dir}/labels_freq_list_{dataset}_{ld}ld.pkl", "wb") as f:
+        with open(os.path.join(f"{save_dir}/rep_hl_labels_freq.pkl"), "wb") as f:
             pickle.dump(repetitions_hl_labels_freq_array, f)
+        with open(os.path.join(f"{save_dir}/rep_hl_distances.pkl"), "wb") as f:
+            pickle.dump(repetitions_hl_distances_array, f)
 
     if return_distances:
         return repetitions_hl_datapoints_freq_array, repetitions_hl_labels_freq_array, repetitions_hl_distances_array
@@ -157,16 +158,15 @@ def compute_rep_hl_datapoints_labels_freq(dataset, ld, datapoints_array, labels_
 
 
 
-def compute_min_distances_frequencies(model_path_kwargs, model_kwargs, datapoints_array, labels_array, return_distances=False):
+def compute_min_distances_frequencies(model_kwargs, datapoints_array, labels_array, return_distances=False):
     """
     Computes the frequency with which each datapoint and label is the closest to a decoded binary latent vector.
 
-    Loads the model specified by model_path_kwargs and model_kwargs, decodes all possible binary latent vectors,
+    Loads the model specified by model_kwargs, decodes all possible binary latent vectors,
     finds the closest datapoint in datapoints_array for each decoded vector, and counts how often each datapoint
     and label is selected as the closest. Optionally returns the minimum distances.
 
     Args:
-        model_path_kwargs (dict): Dictionary of model path parameters.
         model_kwargs (dict): Dictionary of model initialization parameters.
         datapoints_array (np.ndarray): Array of shape (n_datapoints, input_dim), containing datapoints.
         labels_array (np.ndarray): Array of shape (n_datapoints,), containing labels for each datapoint.
@@ -178,7 +178,7 @@ def compute_min_distances_frequencies(model_path_kwargs, model_kwargs, datapoint
             - np.ndarray: Array of shape (n_labels,) with frequencies for each label.
             - np.ndarray (optional): Array of shape (2**latent_dim,) with minimum distances for each decoded vector.
     """
-    decoded_binary_matrix = compute_decoded_binary_matrix(model_path_kwargs, model_kwargs)
+    decoded_binary_matrix = compute_decoded_binary_matrix(model_kwargs)
     closest_rows_indices = compute_closest_rows(decoded_binary_matrix, datapoints_array)
 
     if return_distances:
@@ -200,7 +200,7 @@ def compute_min_distances_frequencies(model_path_kwargs, model_kwargs, datapoint
 
 
 
-def compute_decoded_binary_matrix(model_path_kwargs, model_kwargs):
+def compute_decoded_binary_matrix(model_kwargs):
     """
     Decodes all possible binary latent vectors for a given model.
 
@@ -216,10 +216,15 @@ def compute_decoded_binary_matrix(model_path_kwargs, model_kwargs):
         np.ndarray: Decoded matrix of shape (2**latent_dim, input_dim), where each row is the decoded output
                     for a binary latent vector.
     """
-    model = load_model(model_path_kwargs, model_kwargs)
+    model = load_model(model_kwargs)
     model.eval()
     with torch.no_grad():
         latent_matrix = torch.tensor(binary_matrix(model.latent_dim))
+
+        if model_kwargs.get('num_latent_samples', None) is not None:
+            indices = np.random.choice(latent_matrix.shape[0], size=model_kwargs['num_latent_samples'], replace=False)
+            latent_matrix = latent_matrix[indices]
+
         decoded_matrix = model.decode(latent_matrix).cpu().numpy()
         return decoded_matrix
     
@@ -263,17 +268,6 @@ def compute_min_dist_labels_frequencies(closest_rows_indices, labels_array):
 
 
 # ----------------------------------------------------------------------------
-
-
-
-
-# def load_model(model_path_kwargs, model_kwargs):
-#     my_model = AE_0(
-#         **model_kwargs,
-#     ).to(model_kwargs['device'])
-#     model_path = f"../models/{model_path_kwargs['output_activation_encoder']}/{model_path_kwargs['train_type']}/{model_path_kwargs['latent_dim']}/{model_path_kwargs['dataset']}/dr{model_path_kwargs['decrease_rate']}_{model_path_kwargs['num_hidden_layers']}hl_{model_path_kwargs['train_num']}.pth"
-#     my_model.load_state_dict(torch.load(model_path, map_location=model_kwargs['device']))
-#     return my_model
 
 
 
