@@ -226,7 +226,7 @@ def calc_Z_theoretical(latent_dim, g_param):           # USED IN DEPTH.UTILS
     """
     if math.isclose(g_param, math.log(2)):
         # Handles the case g = log(2) => xi = 1
-        Z = 1.0 + np.exp(g_param) * float(latent_dim)  # DIFFERENT FROM PAPER
+        Z = 1.0 + np.exp(-g_param) * float(latent_dim)  # DIFFERENT FROM PAPER
     else:
         xi = 2.0 * math.exp(-g_param)
         if math.isclose(
@@ -251,7 +251,7 @@ def calc_hfm_prob(m_s: float, g: float, Z: float, logits: True) -> float:
     Calulates the HFM theoretical probability for a state, given m_s, g, and Z.
     If logits=True (default) it returns the log probabilities.
     """
-    H_s = m_s - 1  # max(m_s - 1, 0)
+    H_s = m_s  # max(m_s - 1, 0)
     if logits:
         return -g * H_s - np.log(Z)
     return np.exp(-g * H_s) / Z

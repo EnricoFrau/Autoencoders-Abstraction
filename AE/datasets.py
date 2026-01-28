@@ -246,11 +246,10 @@ class MNISTDigit2OnlyDataset(Dataset):
     def __init__(self, train=True, download=True):
         transform = transforms.Compose([transforms.ToTensor()])
         mnist = datasets.MNIST(
-            root='/Users/enricofrausin/Programmazione/PythonProjects/Fisica/data',
+            datasets_path,
             train=train,
-            download=download,
-            transform=transform
-        )
+            download=download
+            )
         digit_2_data = []
         digit_2_targets = []
         for image, label in mnist:
@@ -266,6 +265,7 @@ class MNISTDigit2OnlyDataset(Dataset):
 
     def __getitem__(self, idx):
         return self.data[idx], self.targets[idx]
+    
 
 
 
@@ -342,7 +342,7 @@ class FEMNISTDataset(Dataset):
             transform = transforms.ToTensor()
 
         emnist = datasets.EMNIST(
-            root='/Users/enricofrausin/Programmazione/PythonProjects/Fisica/data',
+            root=datasets_path,
             split='balanced',
             train=train,
             download=download,
@@ -350,7 +350,7 @@ class FEMNISTDataset(Dataset):
         )
 
         fashionmnist = datasets.FashionMNIST(
-            root='/Users/enricofrausin/Programmazione/PythonProjects/Fisica/data',
+            root=datasets_path,
             train=train,
             download=download,
             transform=transform
@@ -380,6 +380,36 @@ num_workers = min(8, os.cpu_count() or 1)
 pin_memory = torch.cuda.is_available()
 persistent_workers = pin_memory
 
+
+
+
+train_loader_2MNIST = torch.utils.data.DataLoader(
+    MNISTDigit2OnlyDataset(
+        train=True,
+        download=True
+        ),
+    batch_size=batch_size,
+    shuffle=True,
+    num_workers=num_workers,
+    pin_memory=pin_memory,
+    persistent_workers=persistent_workers
+    )
+
+
+val_loader_2MNIST = torch.utils.data.DataLoader(
+    MNISTDigit2OnlyDataset(
+        train=False,
+        download=True
+        ),
+    batch_size=batch_size,
+    shuffle=False,
+    num_workers=num_workers,
+    pin_memory=pin_memory,
+    persistent_workers=persistent_workers
+    )
+
+
+
 train_loader_MNIST = torch.utils.data.DataLoader(
     datasets.MNIST(
         datasets_path,
@@ -400,6 +430,63 @@ val_loader_MNIST = torch.utils.data.DataLoader(
         train=False,
         download=True,
         transform=transforms.ToTensor()
+        ),
+    batch_size=batch_size,
+    shuffle=False,
+    num_workers=num_workers,
+    pin_memory=pin_memory,
+    persistent_workers=persistent_workers
+    )
+
+
+
+
+train_loader_EMNIST = torch.utils.data.DataLoader(
+    datasets.EMNIST(
+        datasets_path,
+        split='balanced',
+        train=True,
+        download=True,
+        transform=transforms.ToTensor()
+        ),
+    batch_size=batch_size,
+    shuffle=True,
+    num_workers=num_workers,
+    pin_memory=pin_memory,
+    persistent_workers=persistent_workers
+    )
+
+val_loader_EMNIST = torch.utils.data.DataLoader(
+    datasets.EMNIST(
+        datasets_path,
+        split='balanced',
+        train=False,
+        download=True,
+        transform=transforms.ToTensor()
+        ),
+    batch_size=batch_size,
+    shuffle=False,
+    num_workers=num_workers,
+    pin_memory=pin_memory,
+    persistent_workers=persistent_workers
+    )
+
+train_loader_FEMNIST = torch.utils.data.DataLoader(
+    FEMNISTDataset(
+        train=True,
+        download=True
+        ),
+    batch_size=batch_size,
+    shuffle=True,
+    num_workers=num_workers,
+    pin_memory=pin_memory,
+    persistent_workers=persistent_workers
+    )
+
+val_loader_FEMNIST = torch.utils.data.DataLoader(
+    FEMNISTDataset(
+        train=False,
+        download=True
         ),
     batch_size=batch_size,
     shuffle=False,

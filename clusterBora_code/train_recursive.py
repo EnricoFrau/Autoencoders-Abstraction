@@ -12,7 +12,7 @@ def main():
     project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
     sys.path.append(project_root)
 
-    from AE.datasets import train_loader_MNIST, val_loader_MNIST
+    from AE.datasets import train_loader_2MNIST, val_loader_2MNIST, train_loader_MNIST, val_loader_MNIST, train_loader_EMNIST, val_loader_EMNIST, train_loader_FEMNIST, val_loader_FEMNIST
     from AE.models import AE_0
     from AE.train import train_recursiveAE, layer_wise_pretrain_load_dict
 
@@ -39,11 +39,14 @@ def main():
     SEED = 57
     torch.manual_seed(SEED)
 
-
-    datasets = ["MNIST"]
+    
+    datasets = ["2MNIST", "MNIST", "EMNIST", "FEMNIST"]
 
     train_loaders = {
+        "2MNIST": train_loader_2MNIST,
         "MNIST": train_loader_MNIST,
+        "EMNIST": train_loader_EMNIST,
+        "FEMNIST": train_loader_FEMNIST,
     }
 
     val_loaders = {

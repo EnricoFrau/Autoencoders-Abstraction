@@ -93,7 +93,7 @@ def write_encoded_dataset_on_file_sigmoid_output(data_loader, model_kwargs, devi
 
 
 
-def compute_dataset_klds_gs_dict_from_sampled_binarized_vectors_(dataset, data_loader, model_kwargs, device, num_hidden_layers_range, hfm_distribution = 'pure', dataset_klds_dict = None, dataset_gs_dict = None, save_permutations = False):
+def compute_dataset_klds_gs_dict_from_sampled_binarized_vectors_(dataset, data_loader, model_kwargs, num_hidden_layers_range, hfm_distribution = 'pure', dataset_klds_dict = None, dataset_gs_dict = None, save_gauges_dir = None):
     """
     Computes and stores the Kullback-Leibler divergences (KLDs) and optimal 'g' values for a given dataset
     using autoencoder models with varying numbers of hidden layers.
@@ -135,10 +135,10 @@ def compute_dataset_klds_gs_dict_from_sampled_binarized_vectors_(dataset, data_l
             print(f"{num_hidden_layers} hidden layers...")
 
         model_kwargs['num_hidden_layers'] = num_hidden_layers
-        model = load_model(model_kwargs, device=device)
+        model = load_model(model_kwargs)
         model.eval()
 
-        kld, g = calc_hfm_kld_with_optimal_g(model, data_loader, return_g=True, binarize_threshold=None, hfm_distribution=hfm_distribution, save_permutations=save_permutations, model_kwargs=model_kwargs)
+        kld, g = calc_hfm_kld_with_optimal_g(model, data_loader, return_g=True, binarize_threshold=None, hfm_distribution=hfm_distribution, save_gauges_dir=save_gauges_dir, model_kwargs=model_kwargs)
 
         dataset_klds_dict[dataset].append(kld)
         dataset_gs_dict[dataset].append(g)
@@ -163,7 +163,7 @@ def calc_hfm_kld_with_optimal_g(            # used in compute_klds_gs_lst_with_f
         return_g = False,
         binarize_threshold = 0.5,
         hfm_distribution = 'pure',
-        save_permutations = False,
+        save_gauges_dir = None,
         model_kwargs = {}):   
     """
     Calculates the KL divergence between the empirical latent state distribution (from the model and data_loader)
@@ -183,9 +183,11 @@ def calc_hfm_kld_with_optimal_g(            # used in compute_klds_gs_lst_with_f
     if IS_TEST_MODE:
         print(f"Calculating emp_states_dict_gauged")
 
-    if save_permutations:
-        emp_states_dict_gauged, gauge_perm = compute_emp_states_dict_gauged(model, data_loader, binarize_threshold=binarize_threshold, hfm_distribution=hfm_distribution, return_perm=True, model_kwargs=model_kwargs)
-        perm_save_dir = os.path.join(project_root, "gauges", "permutations", 'zoom_in', str(model_kwargs['latent_dim'])+"ld", model_kwargs['dataset'], f"dataset_iteration{model_kwargs['iteration']}", f"perm_{model_kwargs['num_hidden_layers']}hl.txt")
+    if save_gauges_dir is not None:
+        emp_states_dict_gauged, gauge_perm = compute_emp_states_dict_gauged(model, data_loader, binarize_threshold=binarize_threshold, hfm_distribution=hfm_distribution, save_gauges_dir=save_gauges_dir, return_perm=True, model_kwargs=model_kwargs)
+        #perm_save_dir = os.path.join(project_root, "gauges", "permutations", 'zoom_in', str(model_kwargs['latent_dim'])+"ld", model_kwargs['dataset'], f"dataset_iteration{model_kwargs['iteration']}", f"perm_{model_kwargs['num_hidden_layers']}hl.txt")
+       # perm_save_dir = os.path.join(project_root, "gauges", "permutations", 'quantized', str(model_kwargs['latent_dim'])+"ld", model_kwargs['dataset'], f"perm_{model_kwargs['num_hidden_layers']}hl.txt")
+        perm_save_dir = os.path.join(project_root, "gauges", "permutations", save_gauges_dir)
         os.makedirs(os.path.dirname(perm_save_dir), exist_ok=True)
         train_num = model_kwargs.get('train_num', 'unknown')
         with open(perm_save_dir, 'a') as f:
@@ -225,6 +227,7 @@ def compute_emp_states_dict_gauged(                 # USED IN calc_hfm_kld_with_
         flip_gauge = True,
         hfm_distribution = 'pure',
         brute_force = False,
+        save_gauges_dir = None,
         return_perm = False,
         verbose = False,
         model_kwargs = None
@@ -261,7 +264,7 @@ def compute_emp_states_dict_gauged(                 # USED IN calc_hfm_kld_with_
         emp_states_dict = compute_emp_states_dict(model, data_loader, binarize_threshold)
 
     if flip_gauge:
-        emp_states_dict = flip_gauge_bits(emp_states_dict, save_flip_gauge=return_perm, model_kwargs=model_kwargs)
+        emp_states_dict = flip_gauge_bits(emp_states_dict, save_gauges_dir=save_gauges_dir, model_kwargs=model_kwargs)
 
     if brute_force:
         gauge_perm = compute_perm_minimizing_hfm_kld_brute_force(emp_states_dict, verbose=verbose)
@@ -305,7 +308,7 @@ def calc_optimal_g(                                 # USED IN calc_hfm_kld_with_
     ms_mean = calc_ms_mean(emp_states_dict_gauged)              # Empirical value to compare with theoretical ms_average values
     latent_dim = len(next(iter(emp_states_dict_gauged)))
 
-    gs = np.linspace(-3, 3, 1000)                               # g domain to calculate -log(Z(g))
+    gs = np.linspace(0, 2, 1000)                               # g domain to calculate -log(Z(g))
 
     y = []
     for g in gs:
@@ -345,7 +348,7 @@ def calc_optimal_g(                                 # USED IN calc_hfm_kld_with_
 
 
 
-def flip_gauge_bits(emp_states_dict, save_flip_gauge=False, model_kwargs=None):                       # USED IN compute_emp_states_dict_gauged
+def flip_gauge_bits(emp_states_dict, save_gauges_dir=None, model_kwargs=None):                       # USED IN compute_emp_states_dict_gauged
     """
     Flip specific bits in all states based on the activated bits in the most frequent state.
 
@@ -359,8 +362,10 @@ def flip_gauge_bits(emp_states_dict, save_flip_gauge=False, model_kwargs=None): 
 
     most_frequent_state = max(emp_states_dict.items(), key=lambda x: x[1])[0]
 
-    if save_flip_gauge and model_kwargs is not None:
-        flip_save_dir = os.path.join(project_root, "gauges", "flip", 'zoom_in', str(model_kwargs['latent_dim']) + "ld", model_kwargs['dataset'], f"dataset_iteration{model_kwargs['iteration']}", f"flipg_{model_kwargs['num_hidden_layers']}hl.txt")
+    if save_gauges_dir is not None and model_kwargs is not None:
+        #flip_save_dir = os.path.join(project_root, "gauges", "flip", 'zoom_in', str(model_kwargs['latent_dim']) + "ld", model_kwargs['dataset'], f"dataset_iteration{model_kwargs['iteration']}", f"flipg_{model_kwargs['num_hidden_layers']}hl.txt")
+        #flip_save_dir = os.path.join(project_root, "gauges", "flip", 'quantized', str(model_kwargs['latent_dim']) + "ld", model_kwargs['dataset'], f"flipg_{model_kwargs['num_hidden_layers']}hl.txt")
+        flip_save_dir = os.path.join(project_root, "gauges", "flip", save_gauges_dir)
         os.makedirs(os.path.dirname(flip_save_dir), exist_ok=True)
         train_num = model_kwargs.get('train_num', 'unknown')
         with open(flip_save_dir, 'a') as f:
@@ -434,81 +439,241 @@ def compute_perm_minimizing_hfm_kld_brute_force(
 
 
 
+# def compute_perm_minimizing_hfm_kld_simul_anneal(
+#     emp_states_dict: dict,
+#     g = np.log(2),
+#     initial_temp = 10.0,
+#     cooling_rate = 0.97,
+#     n_iterations = 150000,
+#     hfm_distribution = 'pure',
+#     verbose = False
+# ):
+#     """
+#     Uses simulated annealing to compute a permutation of state columns that minimizes
+#     the KL divergence between the empirical state distribution and the HFM model.
+
+#     Args:
+#         emp_states_dict (dict): Dictionary mapping state tuples to probabilities, with bits already gauge flipped.
+#         g (float, optional): HFM model parameter. Defaults to np.log(2). The best permutation should be independent from g.
+#         initial_temp (float, optional): Initial temperature for simulated annealing. Defaults to 10.0.
+#         cooling_rate (float, optional): Cooling rate for temperature decay. Defaults to 0.95.
+#         n_iterations (int, optional): Number of iterations for the annealing process. Defaults to 5000.
+#         verbose (bool, optional): If True, prints progress every 100 iterations. Defaults to False.
+
+#     Returns:
+#         list: The permutation of state columns that yields the lowest KL divergence found.
+#     """
+
+#     state_len = len(list(emp_states_dict.keys())[0])
+
+#     current_perm = list(range(state_len))                   # Identity permutation
+#     current_states_dict = emp_states_dict
+#     if hfm_distribution == 'pure':
+#         current_kl = calc_hfm_kld(current_states_dict, g=g)
+#     elif hfm_distribution == 'marginalized':
+#         current_kl = calc_hfm_kld_with_marginalized_hfm(current_states_dict, g=g)
+
+#     best_perm = current_perm                                # No need to .copy() because the variable is not modified
+#     best_kl = current_kl
+
+#     # Metropolis algorithm
+#     temp = initial_temp
+#     for i in range(n_iterations):
+
+#         swap_indices = random.choice(list(combinations(range(state_len), 2)))   
+
+#         candidate_perm = current_perm.copy()                                    # .copy() because the variable is modified
+#         candidate_perm[swap_indices[0]], candidate_perm[swap_indices[1]] = (    # swapped using tuple unpacking
+#             current_perm[swap_indices[1]], current_perm[swap_indices[0]]
+#         )   
+
+#         permuted_states_dict = {tuple(k[i] for i in candidate_perm): v for k, v in emp_states_dict.items()}
+#         if hfm_distribution == 'pure':
+#             candidate_kl = calc_hfm_kld(permuted_states_dict, g=g)
+#         elif hfm_distribution == 'marginalized':
+#             candidate_kl = calc_hfm_kld_with_marginalized_hfm(permuted_states_dict, g=g)
+
+#         delta_kl = candidate_kl - current_kl
+#         if delta_kl < 0 or random.random() < math.exp(-delta_kl / temp):
+
+#             current_perm = candidate_perm
+#             current_kl = candidate_kl
+
+#             if current_kl < best_kl:
+#                 best_perm = current_perm.copy()
+#                 best_kl = current_kl
+
+#         temp *= cooling_rate
+
+#         # Periodic progress report
+#         if verbose and (i + 1) % 100 == 0:
+#             print(
+#                 f"Iteration {i + 1}, Current KL: {current_kl:.6f}, Best KL: {best_kl:.6f}"
+#             )
+
+#     return best_perm
+
 def compute_perm_minimizing_hfm_kld_simul_anneal(
     emp_states_dict: dict,
     g = np.log(2),
-    initial_temp = 10.0,
-    cooling_rate = 0.97,
-    n_iterations = 150000,
+    initial_temp = 5.0,
+    final_temp = 1e-4,
+    n_iterations = 200000,
     hfm_distribution = 'pure',
+    n_restarts = 3,
+    reheat_interval = 20000,
+    reheat_factor = 2.0,
+    patience = 30000,
     verbose = False
 ):
     """
-    Uses simulated annealing to compute a permutation of state columns that minimizes
-    the KL divergence between the empirical state distribution and the HFM model.
+    Uses simulated annealing with restarts and reheating to compute a permutation 
+    of state columns that minimizes the KL divergence between the empirical state 
+    distribution and the HFM model.
 
     Args:
         emp_states_dict (dict): Dictionary mapping state tuples to probabilities, with bits already gauge flipped.
-        g (float, optional): HFM model parameter. Defaults to np.log(2). The best permutation should be independent from g.
-        initial_temp (float, optional): Initial temperature for simulated annealing. Defaults to 10.0.
-        cooling_rate (float, optional): Cooling rate for temperature decay. Defaults to 0.95.
-        n_iterations (int, optional): Number of iterations for the annealing process. Defaults to 5000.
-        verbose (bool, optional): If True, prints progress every 100 iterations. Defaults to False.
+        g (float, optional): HFM model parameter. Defaults to np.log(2).
+        initial_temp (float, optional): Initial temperature for simulated annealing. Defaults to 5.0.
+        final_temp (float, optional): Final temperature target. Defaults to 1e-4.
+        n_iterations (int, optional): Number of iterations per restart. Defaults to 200000.
+        hfm_distribution (str, optional): 'pure' or 'marginalized'. Defaults to 'pure'.
+        n_restarts (int, optional): Number of independent restarts. Defaults to 3.
+        reheat_interval (int, optional): Iterations between reheating. Defaults to 20000.
+        reheat_factor (float, optional): Factor to multiply temperature on reheat. Defaults to 2.0.
+        patience (int, optional): Stop early if no improvement for this many iterations. Defaults to 30000.
+        verbose (bool, optional): If True, prints progress. Defaults to False.
 
     Returns:
         list: The permutation of state columns that yields the lowest KL divergence found.
     """
-
+    
     state_len = len(list(emp_states_dict.keys())[0])
-
-    current_perm = list(range(state_len))                   # Identity permutation
-    current_states_dict = emp_states_dict
+    
+    # Precompute all swap pairs for efficiency
+    all_swaps = list(combinations(range(state_len), 2))
+    
+    # Choose KL function based on distribution type
     if hfm_distribution == 'pure':
-        current_kl = calc_hfm_kld(current_states_dict, g=g)
+        calc_kl = lambda states_dict: calc_hfm_kld(states_dict, g=g)
     elif hfm_distribution == 'marginalized':
-        current_kl = calc_hfm_kld_with_marginalized_hfm(current_states_dict, g=g)
-
-    best_perm = current_perm                                # No need to .copy() because the variable is not modified
-    best_kl = current_kl
-
-    # Metropolis algorithm
-    temp = initial_temp
-    for i in range(n_iterations):
-
-        swap_indices = random.choice(list(combinations(range(state_len), 2)))   
-
-        candidate_perm = current_perm.copy()                                    # .copy() because the variable is modified
-        candidate_perm[swap_indices[0]], candidate_perm[swap_indices[1]] = (    # swapped using tuple unpacking
-            current_perm[swap_indices[1]], current_perm[swap_indices[0]]
-        )   
-
-        permuted_states_dict = {tuple(k[i] for i in candidate_perm): v for k, v in emp_states_dict.items()}
-        if hfm_distribution == 'pure':
-            candidate_kl = calc_hfm_kld(permuted_states_dict, g=g)
-        elif hfm_distribution == 'marginalized':
-            candidate_kl = calc_hfm_kld_with_marginalized_hfm(permuted_states_dict, g=g)
-
-        delta_kl = candidate_kl - current_kl
-        if delta_kl < 0 or random.random() < math.exp(-delta_kl / temp):
-
-            current_perm = candidate_perm
-            current_kl = candidate_kl
-
-            if current_kl < best_kl:
-                best_perm = current_perm.copy()
-                best_kl = current_kl
-
-        temp *= cooling_rate
-
-        # Periodic progress report
-        if verbose and (i + 1) % 100 == 0:
-            print(
-                f"Iteration {i + 1}, Current KL: {current_kl:.6f}, Best KL: {best_kl:.6f}"
-            )
-
-    return best_perm
-
-
+        calc_kl = lambda states_dict: calc_hfm_kld_with_marginalized_hfm(states_dict, g=g)
+    else:
+        raise ValueError("hfm_distribution must be 'pure' or 'marginalized'")
+    
+    def apply_permutation(perm):
+        """Apply permutation to states dict and compute KL."""
+        permuted = {tuple(k[i] for i in perm): v for k, v in emp_states_dict.items()}
+        return calc_kl(permuted)
+    
+    def generate_neighbor(perm, move_type='swap'):
+        """Generate a neighbor permutation using various move types."""
+        new_perm = perm.copy()
+        
+        if move_type == 'swap':
+            # Simple swap of two positions
+            i, j = random.choice(all_swaps)
+            new_perm[i], new_perm[j] = new_perm[j], new_perm[i]
+        
+        elif move_type == 'reverse':
+            # Reverse a random segment
+            i, j = sorted(random.sample(range(state_len), 2))
+            new_perm[i:j+1] = new_perm[i:j+1][::-1]
+        
+        elif move_type == 'insert':
+            # Remove element and insert elsewhere
+            i = random.randrange(state_len)
+            j = random.randrange(state_len)
+            if i != j:
+                elem = new_perm.pop(i)
+                new_perm.insert(j, elem)
+        
+        return new_perm
+    
+    # Exponential cooling rate to reach final_temp
+    cooling_rate = (final_temp / initial_temp) ** (1.0 / n_iterations)
+    
+    global_best_perm = list(range(state_len))
+    global_best_kl = apply_permutation(global_best_perm)
+    
+    for restart in range(n_restarts):
+        # Initialize with random permutation (except first restart uses identity)
+        if restart == 0:
+            current_perm = list(range(state_len))
+        else:
+            current_perm = list(range(state_len))
+            random.shuffle(current_perm)
+        
+        current_kl = apply_permutation(current_perm)
+        best_perm = current_perm.copy()
+        best_kl = current_kl
+        
+        temp = initial_temp
+        iterations_without_improvement = 0
+        
+        for i in range(n_iterations):
+            # Choose move type with probability weights
+            # More swaps early, more diverse moves later
+            if temp > initial_temp * 0.1:
+                move_type = random.choices(
+                    ['swap', 'reverse', 'insert'], 
+                    weights=[0.7, 0.2, 0.1]
+                )[0]
+            else:
+                move_type = 'swap'  # Fine-tuning phase: only swaps
+            
+            candidate_perm = generate_neighbor(current_perm, move_type)
+            candidate_kl = apply_permutation(candidate_perm)
+            
+            delta_kl = candidate_kl - current_kl
+            
+            # Metropolis criterion
+            if delta_kl < 0 or random.random() < math.exp(-delta_kl / temp):
+                current_perm = candidate_perm
+                current_kl = candidate_kl
+                
+                if current_kl < best_kl:
+                    best_perm = current_perm.copy()
+                    best_kl = current_kl
+                    iterations_without_improvement = 0
+                else:
+                    iterations_without_improvement += 1
+            else:
+                iterations_without_improvement += 1
+            
+            # Cooling
+            temp *= cooling_rate
+            
+            # Reheating to escape local minima
+            if (i + 1) % reheat_interval == 0 and temp < initial_temp * 0.5:
+                temp = min(temp * reheat_factor, initial_temp * 0.5)
+                if verbose:
+                    print(f"  Restart {restart+1}, Iter {i+1}: Reheating to temp={temp:.4f}")
+            
+            # Early stopping for this restart
+            if iterations_without_improvement >= patience:
+                if verbose:
+                    print(f"  Restart {restart+1}: Early stop at iter {i+1}, best KL={best_kl:.6f}")
+                break
+            
+            # Periodic progress report
+            if verbose and (i + 1) % 10000 == 0:
+                print(
+                    f"  Restart {restart+1}, Iter {i+1}, Temp: {temp:.4f}, "
+                    f"Current KL: {current_kl:.6f}, Best KL: {best_kl:.6f}"
+                )
+        
+        # Update global best
+        if best_kl < global_best_kl:
+            global_best_perm = best_perm.copy()
+            global_best_kl = best_kl
+            if verbose:
+                print(f"Restart {restart+1}: New global best KL = {global_best_kl:.6f}")
+    
+    if verbose:
+        print(f"Final best KL: {global_best_kl:.6f}, Permutation: {global_best_perm}")
+    
+    return global_best_perm
 
 
 def calc_ms_mean(emp_states_dict_gauged):

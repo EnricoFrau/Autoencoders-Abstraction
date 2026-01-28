@@ -60,10 +60,12 @@ def select_data_by_feature_activation(
 
 
 
-
 class BlurredSubset(Dataset):
     def __init__(self, base_dataset, indices, kernel_size, sigma):
-        self.subset = Subset(base_dataset, indices)
+        if indices is None:
+            self.subset = base_dataset
+        else:
+            self.subset = Subset(base_dataset, indices)
         if kernel_size == 0 and sigma == 0:
             self.blur = None
         else:
@@ -77,4 +79,3 @@ class BlurredSubset(Dataset):
         if self.blur is not None:
             img = self.blur(img)
         return img, label
-
