@@ -248,7 +248,8 @@ class MNISTDigit2OnlyDataset(Dataset):
         mnist = datasets.MNIST(
             datasets_path,
             train=train,
-            download=download
+            download=download,
+            transform=transform
             )
         digit_2_data = []
         digit_2_targets = []

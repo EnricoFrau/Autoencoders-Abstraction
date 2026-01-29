@@ -187,7 +187,7 @@ def calc_hfm_kld_with_optimal_g(            # used in compute_klds_gs_lst_with_f
         emp_states_dict_gauged, gauge_perm = compute_emp_states_dict_gauged(model, data_loader, binarize_threshold=binarize_threshold, hfm_distribution=hfm_distribution, save_gauges_dir=save_gauges_dir, return_perm=True, model_kwargs=model_kwargs)
         #perm_save_dir = os.path.join(project_root, "gauges", "permutations", 'zoom_in', str(model_kwargs['latent_dim'])+"ld", model_kwargs['dataset'], f"dataset_iteration{model_kwargs['iteration']}", f"perm_{model_kwargs['num_hidden_layers']}hl.txt")
        # perm_save_dir = os.path.join(project_root, "gauges", "permutations", 'quantized', str(model_kwargs['latent_dim'])+"ld", model_kwargs['dataset'], f"perm_{model_kwargs['num_hidden_layers']}hl.txt")
-        perm_save_dir = os.path.join(project_root, "gauges", "permutations", save_gauges_dir)
+        perm_save_dir = os.path.join(project_root, "gauges", "permutations", save_gauges_dir, f"perm_{model_kwargs['num_hidden_layers']}hl.txt")
         os.makedirs(os.path.dirname(perm_save_dir), exist_ok=True)
         train_num = model_kwargs.get('train_num', 'unknown')
         with open(perm_save_dir, 'a') as f:
@@ -365,7 +365,7 @@ def flip_gauge_bits(emp_states_dict, save_gauges_dir=None, model_kwargs=None):  
     if save_gauges_dir is not None and model_kwargs is not None:
         #flip_save_dir = os.path.join(project_root, "gauges", "flip", 'zoom_in', str(model_kwargs['latent_dim']) + "ld", model_kwargs['dataset'], f"dataset_iteration{model_kwargs['iteration']}", f"flipg_{model_kwargs['num_hidden_layers']}hl.txt")
         #flip_save_dir = os.path.join(project_root, "gauges", "flip", 'quantized', str(model_kwargs['latent_dim']) + "ld", model_kwargs['dataset'], f"flipg_{model_kwargs['num_hidden_layers']}hl.txt")
-        flip_save_dir = os.path.join(project_root, "gauges", "flip", save_gauges_dir)
+        flip_save_dir = os.path.join(project_root, "gauges", "flip", save_gauges_dir, f"flipg_{model_kwargs['num_hidden_layers']}hl.txt")
         os.makedirs(os.path.dirname(flip_save_dir), exist_ok=True)
         train_num = model_kwargs.get('train_num', 'unknown')
         with open(flip_save_dir, 'a') as f:
