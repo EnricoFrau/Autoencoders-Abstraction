@@ -22,7 +22,7 @@ def load_model(model_kwargs, print_result=False):
     ).to(model_kwargs.get('device'))
     #model_path = os.path.join(project_root, "models", "recursive", f"lm_lmb_{model_kwargs['lm_lmb']}",f"{model_kwargs['latent_dim']}ld", f"{model_kwargs['dataset']}", f"dr{model_kwargs['decrease_rate']}_{model_kwargs['num_hidden_layers']}hl_{model_kwargs['train_num']}.pth")
     #model_path = os.path.join(project_root, "models", "quantized", f"{model_kwargs['latent_dim']}ld", f"{model_kwargs['dataset']}", f"dr{model_kwargs['decrease_rate']}_{model_kwargs['num_hidden_layers']}hl_{model_kwargs['train_num']}.pth")
-    model_path = os.path.join(project_root, "models", "zoomout", f"{model_kwargs['quantize_latent_path']}, "f"{model_kwargs['latent_dim']}ld", f"{model_kwargs['dataset']}", f"dr{model_kwargs['decrease_rate']}_{model_kwargs['num_hidden_layers']}hl_{model_kwargs['train_num']}.pth")
+    model_path = os.path.join(project_root, "models", "zoomout", f"{model_kwargs['quantize_latent_path']}", f"{model_kwargs['latent_dim']}ld", f"{model_kwargs['dataset']}", f"dr{model_kwargs['decrease_rate']}_{model_kwargs['num_hidden_layers']}hl_{model_kwargs['train_num']}.pth")
     my_model.load_state_dict(torch.load(model_path, map_location=model_kwargs.get('device')))
     if print_result:
         print(f"Model loaded from {model_path}")

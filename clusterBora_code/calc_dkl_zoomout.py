@@ -86,7 +86,6 @@ def main():
                     dataset=dataset,
                     data_loader=train_loaders[dataset],
                     model_kwargs=model_kwargs,
-                    device=device,
                     num_hidden_layers_range=num_hidden_layers_range,
                     dataset_klds_dict=dataset_klds_dict[train_num],
                     dataset_gs_dict=dataset_gs_dict[train_num],
