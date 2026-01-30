@@ -25,7 +25,40 @@ IS_TEST_MODE = False
 # –––––––––––––––––––––––––––––––––––– EXPORTED TO DEPTH_ANALYSIS –––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––
 
 
-def mean_over_outer_dict(dataset_dicts, selected_train_nums=None):
+# def mean_over_outer_dict(dataset_dicts, selected_train_nums=None):
+#     # If not specified, use all train_nums
+#     if selected_train_nums is None:
+#         train_nums = list(dataset_dicts.keys())
+#     else:
+#         train_nums = list(selected_train_nums)
+#     # Get all dataset names (assume all inner dicts have the same keys)
+#     dataset_names = list(dataset_dicts[train_nums[0]].keys())
+#     # Prepare output
+#     mean_dict = {ds: [] for ds in dataset_names}
+#     # Find the minimum length for each dataset to avoid shape mismatch
+#     min_lengths = {ds: min(len(dataset_dicts[tn][ds]) for tn in train_nums) for ds in dataset_names}
+#     # Compute mean for each dataset and each position
+#     for ds in dataset_names:
+#         # Stack lists for this dataset across all selected train_nums, up to min length
+#         stacked = np.array([dataset_dicts[tn][ds][:min_lengths[ds]] for tn in train_nums])
+#         mean_dict[ds] = stacked.mean(axis=0).tolist()
+#     return mean_dict
+
+
+
+def mean_over_outer_dict(dataset_dicts, selected_train_nums=None, return_std=False):
+    """
+    Computes the mean (and optionally standard deviation) over the outer dictionary for each dataset.
+
+    Args:
+        dataset_dicts (dict): Nested dictionary {train_num: {dataset_name: list of values}}.
+        selected_train_nums (list, optional): List of train_nums to include. If None, use all.
+        return_std (bool, optional): If True, also return a dict of standard deviations.
+
+    Returns:
+        dict: Mean values for each dataset.
+        dict (optional): Standard deviation values for each dataset (if return_std is True).
+    """
     # If not specified, use all train_nums
     if selected_train_nums is None:
         train_nums = list(dataset_dicts.keys())
@@ -35,15 +68,21 @@ def mean_over_outer_dict(dataset_dicts, selected_train_nums=None):
     dataset_names = list(dataset_dicts[train_nums[0]].keys())
     # Prepare output
     mean_dict = {ds: [] for ds in dataset_names}
+    if return_std:
+        std_dict = {ds: [] for ds in dataset_names}
     # Find the minimum length for each dataset to avoid shape mismatch
     min_lengths = {ds: min(len(dataset_dicts[tn][ds]) for tn in train_nums) for ds in dataset_names}
-    # Compute mean for each dataset and each position
+    # Compute mean (and std) for each dataset and each position
     for ds in dataset_names:
         # Stack lists for this dataset across all selected train_nums, up to min length
         stacked = np.array([dataset_dicts[tn][ds][:min_lengths[ds]] for tn in train_nums])
         mean_dict[ds] = stacked.mean(axis=0).tolist()
-    return mean_dict
-
+        if return_std:
+            std_dict[ds] = stacked.std(axis=0).tolist()
+    if return_std:
+        return mean_dict, std_dict
+    else:
+        return mean_dict
 
 
 def write_encoded_dataset_on_file_sigmoid_output(data_loader, model_kwargs, device, model_path_kwargs, num_hidden_layers_range):

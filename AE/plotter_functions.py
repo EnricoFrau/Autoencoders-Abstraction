@@ -602,14 +602,83 @@ def datasets_dicts_comparison(klds_dict, save_dir = None):                      
 
 
 
+
+
+# def datasets_dicts_comparison_colored(
+#     klds_dict, gs_dict, save_dir=None, title=None, std_dict=None
+# ):
+#     """
+#     Plots KL values for each dataset in klds_dict on the same graph.
+#     Uses gs_dict for coloring the points and the line.
+#     Each key is distinguished by marker style (empty marker).
+#     Line color varies continuously along the plot according to gs_dict.
+#     If std_dict is provided, error bars are plotted for each point.
+#     """
+#     import itertools
+#     from matplotlib.collections import LineCollection
+#     import matplotlib as mpl
+
+#     plt.figure(figsize=(8, 5))
+#     markers = ['o', 's', 'D', '^', 'v', 'P', '*', 'X', '<', '>']
+#     marker_cycle = itertools.cycle(markers)
+#     cmap = plt.get_cmap('inferno')
+
+#     # Calculate global min/max for gs values across all datasets
+#     all_gs_values = np.concatenate([np.array(gs_dict[key]) for key in gs_dict.keys()])
+#     global_vmin = all_gs_values.min()
+#     global_vmax = all_gs_values.max()
+#     norm = mpl.colors.Normalize(vmin=global_vmin, vmax=global_vmax)
+
+#     for key in klds_dict.keys():
+#         values_1 = np.array(klds_dict[key])
+#         values_2 = np.array(gs_dict[key])
+#         x = np.arange(1, len(values_1) + 1)
+#         marker = next(marker_cycle)
+
+#         # Scatter with empty markers
+#         scatter = plt.scatter(
+#             x, values_1, c=values_2, cmap=cmap, norm=norm, s=50, marker=marker,
+#             edgecolors='black', facecolors='white', label=key, linewidths=0.5
+#         )
+
+#         # Plot error bars if std_dict is provided
+#         if std_dict is not None and key in std_dict:
+#             yerr = np.array(std_dict[key])
+#             plt.errorbar(
+#                 x, values_1, yerr=yerr, fmt='none', ecolor='gray', elinewidth=1, capsize=3, alpha=0.7
+#             )
+
+#         # Line color varies along gs_dict
+#         points = np.array([x, values_1]).T.reshape(-1, 1, 2)
+#         segments = np.concatenate([points[:-1], points[1:]], axis=1)
+#         lc = LineCollection(segments, cmap=cmap, norm=norm)
+#         lc.set_array(values_2[:-1])
+#         lc.set_linewidth(0.8)
+#         lc.set_linestyle("--")
+#         plt.gca().add_collection(lc)
+
+#     plt.xlabel("Number of hidden layers")
+#     plt.ylabel("Dkl with HFM")
+#     plt.title(title)
+#     plt.legend()
+#     plt.grid(True)
+#     plt.colorbar(scatter, label="gs", cmap=cmap)
+
+#     save_fig(save_dir, "comparison.png")
+#     plt.show()
+
+
 def datasets_dicts_comparison_colored(
-    klds_dict, gs_dict, save_dir=None, title=None
+    klds_dict, gs_dict, save_dir=None, title=None, std_dict=None, slice_indices=None
 ):
     """
     Plots KL values for each dataset in klds_dict on the same graph.
     Uses gs_dict for coloring the points and the line.
     Each key is distinguished by marker style (empty marker).
     Line color varies continuously along the plot according to gs_dict.
+    If std_dict is provided, error bars are plotted for each point.
+    Optionally, only a slice or a list of indices (1-indexed) can be plotted using slice_indices.
+    If slice_indices is a list/tuple, it is interpreted as 1-indexed positions.
     """
     import itertools
     from matplotlib.collections import LineCollection
@@ -620,16 +689,43 @@ def datasets_dicts_comparison_colored(
     marker_cycle = itertools.cycle(markers)
     cmap = plt.get_cmap('inferno')
 
-    # Calculate global min/max for gs values across all datasets
-    all_gs_values = np.concatenate([np.array(gs_dict[key]) for key in gs_dict.keys()])
+    # Helper to handle both slices and explicit index lists (1-indexed)
+    def select_indices(arr, indices):
+        if indices is None:
+            return np.array(arr)
+        elif isinstance(indices, (list, tuple, np.ndarray)):
+            # 1-indexed to 0-indexed
+            idxs = [i-1 for i in indices]
+            return np.array(arr)[idxs]
+        elif isinstance(indices, slice):
+            return np.array(arr)[indices]
+        else:
+            raise ValueError("slice_indices must be None, a list/tuple of indices (1-indexed), or a slice.")
+
+    # Calculate global min/max for gs values across all datasets (after slicing)
+    all_gs_values = np.concatenate([
+        select_indices(gs_dict[key], slice_indices) for key in gs_dict.keys()
+    ])
     global_vmin = all_gs_values.min()
     global_vmax = all_gs_values.max()
     norm = mpl.colors.Normalize(vmin=global_vmin, vmax=global_vmax)
 
     for key in klds_dict.keys():
-        values_1 = np.array(klds_dict[key])
-        values_2 = np.array(gs_dict[key])
-        x = np.arange(1, len(values_1) + 1)
+        values_1 = select_indices(klds_dict[key], slice_indices)
+        values_2 = select_indices(gs_dict[key], slice_indices)
+        
+        # x axis: always use the 1-indexed positions (either all or selected)
+        if slice_indices is None:
+            x = np.arange(1, len(klds_dict[key]) + 1)
+        elif isinstance(slice_indices, (list, tuple, np.ndarray)):
+            x = np.array(slice_indices)  # Already 1-indexed
+        elif isinstance(slice_indices, slice):
+            # reconstruct the 1-indexed positions from the slice
+            full_range = np.arange(1, len(klds_dict[key]) + 1)
+            x = full_range[slice_indices]
+        else:
+            raise ValueError("slice_indices must be None, a list/tuple of indices (1-indexed), or a slice.")
+
         marker = next(marker_cycle)
 
         # Scatter with empty markers
@@ -638,14 +734,22 @@ def datasets_dicts_comparison_colored(
             edgecolors='black', facecolors='white', label=key, linewidths=0.5
         )
 
+        # Plot error bars if std_dict is provided
+        if std_dict is not None and key in std_dict:
+            yerr = select_indices(std_dict[key], slice_indices)
+            plt.errorbar(
+                x, values_1, yerr=yerr, fmt='none', ecolor='gray', elinewidth=1, capsize=3, alpha=0.7
+            )
+
         # Line color varies along gs_dict
         points = np.array([x, values_1]).T.reshape(-1, 1, 2)
         segments = np.concatenate([points[:-1], points[1:]], axis=1)
-        lc = LineCollection(segments, cmap=cmap, norm=norm)
-        lc.set_array(values_2[:-1])
-        lc.set_linewidth(0.8)
-        lc.set_linestyle("--")
-        plt.gca().add_collection(lc)
+        if len(values_2) > 1:
+            lc = LineCollection(segments, cmap=cmap, norm=norm)
+            lc.set_array(values_2[:-1])
+            lc.set_linewidth(0.8)
+            lc.set_linestyle("--")
+            plt.gca().add_collection(lc)
 
     plt.xlabel("Number of hidden layers")
     plt.ylabel("Dkl with HFM")

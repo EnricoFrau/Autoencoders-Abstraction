@@ -39,7 +39,7 @@ def main():
     torch.manual_seed(SEED)
 
     
-    datasets = ["2MNIST",]
+    datasets = ["2MNIST","MNIST"]
 
     train_loaders = {
         "2MNIST": train_loader_2MNIST,
@@ -48,7 +48,7 @@ def main():
         "FEMNIST": train_loader_FEMNIST,
     }
 
-    for latent_dim in (10,12):
+    for latent_dim in (10,):
         for i, dataset in enumerate(datasets):
 
             model_kwargs = {
@@ -71,8 +71,8 @@ def main():
                 dataset_klds_dict = {}
                 dataset_gs_dict = {}
 
-            num_hidden_layers_range = range(1,4)
-            for train_num in range(2):
+            num_hidden_layers_range = range(1,8)
+            for train_num in range(3):
                 model_kwargs['train_num'] = train_num
 
                 if train_num not in dataset_klds_dict:
@@ -92,12 +92,11 @@ def main():
                     save_gauges_dir=gauges_dir,
                 )
 
-
-    os.makedirs(os.path.join(project_root, 'savings', 'zoomout', 'klds_gs', 'quantized', f'{latent_dim}ld'), exist_ok=True)
-    with open(os.path.join(project_root, 'savings', 'zoomout', 'klds_gs', 'quantized', f'{latent_dim}ld', 'dataset_klds_dict.pkl'), 'wb') as f:
-        pickle.dump(dataset_klds_dict, f)
-    with open(os.path.join(project_root, 'savings', 'zoomout','klds_gs', 'quantized', f'{latent_dim}ld', 'dataset_gs_dict.pkl'), 'wb') as f:
-        pickle.dump(dataset_gs_dict, f)
+        os.makedirs(os.path.join(project_root, 'savings', 'zoomout', 'klds_gs', 'quantized', f'{latent_dim}ld'), exist_ok=True)
+        with open(os.path.join(project_root, 'savings', 'zoomout', 'klds_gs', 'quantized', f'{latent_dim}ld', 'dataset_klds_dict.pkl'), 'wb') as f:
+            pickle.dump(dataset_klds_dict, f)
+        with open(os.path.join(project_root, 'savings', 'zoomout','klds_gs', 'quantized', f'{latent_dim}ld', 'dataset_gs_dict.pkl'), 'wb') as f:
+            pickle.dump(dataset_gs_dict, f)
 
 
 if __name__ == "__main__":

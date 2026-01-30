@@ -14,27 +14,56 @@ from AE.utils import load_model
 
 IS_TEST_MODE = False
 
+import os
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+datasets_path = os.path.join(project_root, 'datasets')
+    
+
 
 def get_datapoints_labels_arrays(dataset_name, train=True):
+    """
+    Loads a dataset by name and returns its datapoints and labels as sorted numpy arrays.
+
+    Args:
+        dataset_name (str): Name of the dataset to load. Supported values are:
+            - '2MNIST'
+            - 'MNIST'
+            - 'EMNIST'
+            - 'FEMNIST'
+        train (bool, optional): Whether to load the training set (True) or test set (False). Default is True.
+
+    Returns:
+        tuple:
+            - datapoints_array (np.ndarray): Array of shape (num_samples, input_dim) containing flattened datapoints.
+            - labels_array (np.ndarray): Array of shape (num_samples,) containing the corresponding labels, sorted in ascending order.
+
+    Raises:
+        ValueError: If an unknown dataset_name is provided.
+
+    Notes:
+        - The datapoints and labels are sorted by label value.
+        - The function automatically downloads the dataset if not present.
+    """
+
     if dataset_name == 'MNIST':
         dataset = datasets.MNIST(
-            '/Users/enricofrausin/Programmazione/PythonProjects/Fisica/data',
+            datasets_path,
             train=train,
             download=True,
             transform=transforms.ToTensor()
             )
     elif dataset_name == 'EMNIST':
         dataset = datasets.EMNIST(
-            '/Users/enricofrausin/Programmazione/PythonProjects/Fisica/data',
+            datasets_path,
             split='balanced',
             train=train,
             download=True,
             transform=transforms.ToTensor()
             )
-    elif dataset_name == '2MNISTonly':
-        dataset = MNISTDigit2OnlyDataset(train=train, download=True)
     elif dataset_name == '2MNIST':
-        dataset = MNISTDigit2Dataset(train=train, download=True, target_size=60000)
+        dataset = MNISTDigit2OnlyDataset(train=train, download=True)
+    # elif dataset_name == '2MNIST':
+    #     dataset = MNISTDigit2Dataset(train=train, download=True, target_size=60000)
     elif dataset_name == 'FEMNIST':
         dataset = FEMNISTDataset(train=train, download=True)
     else:
@@ -625,10 +654,10 @@ def compute_overlap_matrix(datasets, model_path_kwargs, model_kwargs, repetition
 
 
 
-def compute_all_decoded_features_distances_without_repetitions(model_path_kwargs, model_kwargs, repetitions = (0,0), datasets=None):
-    model_path_kwargs['dataset'] = datasets[0]
-    model_path_kwargs['train_num'] = repetitions[0]
-    model_D = load_model(model_path_kwargs, model_kwargs)
+def compute_all_decoded_features_distances_without_repetitions(model_kwargs, repetitions = (0,0), datasets=None):
+    model_kwargs['dataset'] = datasets[0]
+    model_kwargs['train_num'] = repetitions[0]
+    model_D = load_model(model_kwargs)
 
     model_path_kwargs['dataset'] = datasets[1]
     model_path_kwargs['train_num'] = repetitions[1]
