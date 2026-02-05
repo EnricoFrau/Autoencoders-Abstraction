@@ -39,8 +39,9 @@ def main():
 
 
 
-    datasets = ["MNIST"] #,"EMNIST","FEMNIST"]
-    latent_dims = [10]
+    latent_dims = [10,]
+    datasets = ["MNIST", "FEMNIST"]
+    train_nums = range(6)
 
 
 
@@ -74,7 +75,7 @@ def main():
                 model_kwargs=model_kwargs,
                 datapoints_array=datapoints_array,
                 labels_array=labels_array,
-                repetitions_range=(0,),
+                repetitions_range=train_nums,
                 num_hidden_layers_range=range(1, 8),
                 return_distances=True,
                 save_dir=save_dir
@@ -86,6 +87,60 @@ def main():
                 pickle.dump(rep_hl_labels_freq, f)
             with open(f"{save_dir}/rep_hl_distances.pkl", "wb") as f:
                 pickle.dump(rep_hl_distances, f)
+
+
+
+
+    latent_dims = [14,]
+    datasets = ["MNIST", "FEMNIST"]
+    train_nums = range(3)
+
+
+
+    for dataset in datasets:
+
+        datapoints_array, labels_array = get_datapoints_labels_arrays(dataset, train=True)
+
+
+        for latent_dim in latent_dims:
+
+            model_kwargs = {
+                'input_dim': 28*28,
+                'latent_dim': latent_dim,
+                'decrease_rate': 0.625,
+                'device': device,
+                'output_activation_encoder': nn.Sigmoid,
+                'output_activation_decoder': nn.Sigmoid,
+                'output_activation_encoder_path': 'sigmoid output encoder',
+                'output_activation_decoder_path': 'sigmoid output decoder',
+                'dataset': dataset,
+                'train_num': 0,
+                'quantize_latent': True,
+                'quantize_latent_path': 'quantized',
+                #'num_latent_samples': None
+            }
+
+            save_dir = os.path.join(project_root, "savings/zoomout/features_freq/quantized", f"{latent_dim}ld", dataset)
+            os.makedirs(save_dir, exist_ok=True)
+
+            rep_hl_datapoints_freq, rep_hl_labels_freq, rep_hl_distances  = compute_rep_hl_datapoints_labels_freq(
+                model_kwargs=model_kwargs,
+                datapoints_array=datapoints_array,
+                labels_array=labels_array,
+                repetitions_range=train_nums,
+                num_hidden_layers_range=range(1, 8),
+                return_distances=True,
+                save_dir=save_dir
+            )
+
+            with open(f"{save_dir}/rep_hl_datapoints_freq.pkl", "wb") as f:
+                pickle.dump(rep_hl_datapoints_freq, f)
+            with open(f"{save_dir}/rep_hl_labels_freq.pkl", "wb") as f:
+                pickle.dump(rep_hl_labels_freq, f)
+            with open(f"{save_dir}/rep_hl_distances.pkl", "wb") as f:
+                pickle.dump(rep_hl_distances, f)
+
+
 
 
 

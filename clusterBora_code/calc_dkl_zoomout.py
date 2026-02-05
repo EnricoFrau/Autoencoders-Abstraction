@@ -2,6 +2,7 @@ def main():
     import torch
     from torch import nn
     import pickle
+    from datetime import datetime
 
     IS_TEST_MODE = True
     IS_CLUSTER_ENV = True
@@ -39,7 +40,9 @@ def main():
     torch.manual_seed(SEED)
 
     
-    datasets = ["2MNIST","MNIST"]
+    datasets = ["EMNIST", "FEMNIST"]
+    train_nums = range(6)
+    latent_dims = [16]
 
     train_loaders = {
         "2MNIST": train_loader_2MNIST,
@@ -48,7 +51,11 @@ def main():
         "FEMNIST": train_loader_FEMNIST,
     }
 
-    for latent_dim in (10,):
+    # Record start time
+    start_time = datetime.now()
+    print(f"Starting processing at {start_time.strftime('%H:%M:%S')}")
+
+    for latent_dim in latent_dims:
         for i, dataset in enumerate(datasets):
 
             model_kwargs = {
@@ -72,7 +79,7 @@ def main():
                 dataset_gs_dict = {}
 
             num_hidden_layers_range = range(1,8)
-            for train_num in range(3):
+            for train_num in train_nums:
                 model_kwargs['train_num'] = train_num
 
                 if train_num not in dataset_klds_dict:
@@ -91,6 +98,12 @@ def main():
                     dataset_gs_dict=dataset_gs_dict[train_num],
                     save_gauges_dir=gauges_dir,
                 )
+            
+            # Print progress after each dataset
+            current_time = datetime.now()
+            elapsed_time = current_time - start_time
+            elapsed_str = str(elapsed_time).split('.')[0]  # Remove microseconds
+            print(f"[{current_time.strftime('%H:%M:%S')}] [Elapsed: {elapsed_str}] Completed dataset {dataset} for latent_dim={latent_dim} ({i+1}/{len(datasets)})")
 
         os.makedirs(os.path.join(project_root, 'savings', 'zoomout', 'klds_gs', 'quantized', f'{latent_dim}ld'), exist_ok=True)
         with open(os.path.join(project_root, 'savings', 'zoomout', 'klds_gs', 'quantized', f'{latent_dim}ld', 'dataset_klds_dict.pkl'), 'wb') as f:

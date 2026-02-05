@@ -552,35 +552,197 @@ def compute_perm_minimizing_hfm_kld_brute_force(
 
 #     return best_perm
 
+
+
+
+
+
+
+# def compute_perm_minimizing_hfm_kld_simul_anneal(
+#     emp_states_dict: dict,
+#     g = np.log(2),
+#     initial_temp = 5.0,
+#     final_temp = 1e-4,
+#     n_iterations = 200000,
+#     hfm_distribution = 'pure',
+#     n_restarts = 3,
+#     reheat_interval = 20000,
+#     reheat_factor = 2.0,
+#     patience = 30000,
+#     verbose = False
+# ):
+#     """
+#     Uses simulated annealing with restarts and reheating to compute a permutation 
+#     of state columns that minimizes the KL divergence between the empirical state 
+#     distribution and the HFM model.
+
+#     Args:
+#         emp_states_dict (dict): Dictionary mapping state tuples to probabilities, with bits already gauge flipped.
+#         g (float, optional): HFM model parameter. Defaults to np.log(2).
+#         initial_temp (float, optional): Initial temperature for simulated annealing. Defaults to 5.0.
+#         final_temp (float, optional): Final temperature target. Defaults to 1e-4.
+#         n_iterations (int, optional): Number of iterations per restart. Defaults to 200000.
+#         hfm_distribution (str, optional): 'pure' or 'marginalized'. Defaults to 'pure'.
+#         n_restarts (int, optional): Number of independent restarts. Defaults to 3.
+#         reheat_interval (int, optional): Iterations between reheating. Defaults to 20000.
+#         reheat_factor (float, optional): Factor to multiply temperature on reheat. Defaults to 2.0.
+#         patience (int, optional): Stop early if no improvement for this many iterations. Defaults to 30000.
+#         verbose (bool, optional): If True, prints progress. Defaults to False.
+
+#     Returns:
+#         list: The permutation of state columns that yields the lowest KL divergence found.
+#     """
+    
+#     state_len = len(list(emp_states_dict.keys())[0])
+    
+#     # Precompute all swap pairs for efficiency
+#     all_swaps = list(combinations(range(state_len), 2))
+    
+#     # Choose KL function based on distribution type
+#     if hfm_distribution == 'pure':
+#         calc_kl = lambda states_dict: calc_hfm_kld(states_dict, g=g)
+#     elif hfm_distribution == 'marginalized':
+#         calc_kl = lambda states_dict: calc_hfm_kld_with_marginalized_hfm(states_dict, g=g)
+#     else:
+#         raise ValueError("hfm_distribution must be 'pure' or 'marginalized'")
+    
+#     def apply_permutation(perm):
+#         """Apply permutation to states dict and compute KL."""
+#         permuted = {tuple(k[i] for i in perm): v for k, v in emp_states_dict.items()}
+#         return calc_kl(permuted)
+    
+#     def generate_neighbor(perm, move_type='swap'):
+#         """Generate a neighbor permutation using various move types."""
+#         new_perm = perm.copy()
+        
+#         if move_type == 'swap':
+#             # Simple swap of two positions
+#             i, j = random.choice(all_swaps)
+#             new_perm[i], new_perm[j] = new_perm[j], new_perm[i]
+        
+#         elif move_type == 'reverse':
+#             # Reverse a random segment
+#             i, j = sorted(random.sample(range(state_len), 2))
+#             new_perm[i:j+1] = new_perm[i:j+1][::-1]
+        
+#         elif move_type == 'insert':
+#             # Remove element and insert elsewhere
+#             i = random.randrange(state_len)
+#             j = random.randrange(state_len)
+#             if i != j:
+#                 elem = new_perm.pop(i)
+#                 new_perm.insert(j, elem)
+        
+#         return new_perm
+    
+#     # Exponential cooling rate to reach final_temp
+#     cooling_rate = (final_temp / initial_temp) ** (1.0 / n_iterations)
+    
+#     global_best_perm = list(range(state_len))
+#     global_best_kl = apply_permutation(global_best_perm)
+    
+#     for restart in range(n_restarts):
+#         # Initialize with random permutation (except first restart uses identity)
+#         if restart == 0:
+#             current_perm = list(range(state_len))
+#         else:
+#             current_perm = list(range(state_len))
+#             random.shuffle(current_perm)
+        
+#         current_kl = apply_permutation(current_perm)
+#         best_perm = current_perm.copy()
+#         best_kl = current_kl
+        
+#         temp = initial_temp
+#         iterations_without_improvement = 0
+        
+#         for i in range(n_iterations):
+#             # Choose move type with probability weights
+#             # More swaps early, more diverse moves later
+#             if temp > initial_temp * 0.1:
+#                 move_type = random.choices(
+#                     ['swap', 'reverse', 'insert'], 
+#                     weights=[0.7, 0.2, 0.1]
+#                 )[0]
+#             else:
+#                 move_type = 'swap'  # Fine-tuning phase: only swaps
+            
+#             candidate_perm = generate_neighbor(current_perm, move_type)
+#             candidate_kl = apply_permutation(candidate_perm)
+            
+#             delta_kl = candidate_kl - current_kl
+            
+#             # Metropolis criterion
+#             if delta_kl < 0 or random.random() < math.exp(-delta_kl / temp):
+#                 current_perm = candidate_perm
+#                 current_kl = candidate_kl
+                
+#                 if current_kl < best_kl:
+#                     best_perm = current_perm.copy()
+#                     best_kl = current_kl
+#                     iterations_without_improvement = 0
+#                 else:
+#                     iterations_without_improvement += 1
+#             else:
+#                 iterations_without_improvement += 1
+            
+#             # Cooling
+#             temp *= cooling_rate
+            
+#             # Reheating to escape local minima
+#             if (i + 1) % reheat_interval == 0 and temp < initial_temp * 0.5:
+#                 temp = min(temp * reheat_factor, initial_temp * 0.5)
+#                 if verbose:
+#                     print(f"  Restart {restart+1}, Iter {i+1}: Reheating to temp={temp:.4f}")
+            
+#             # Early stopping for this restart
+#             if iterations_without_improvement >= patience:
+#                 if verbose:
+#                     print(f"  Restart {restart+1}: Early stop at iter {i+1}, best KL={best_kl:.6f}")
+#                 break
+            
+#             # Periodic progress report
+#             if verbose and (i + 1) % 10000 == 0:
+#                 print(
+#                     f"  Restart {restart+1}, Iter {i+1}, Temp: {temp:.4f}, "
+#                     f"Current KL: {current_kl:.6f}, Best KL: {best_kl:.6f}"
+#                 )
+        
+#         # Update global best
+#         if best_kl < global_best_kl:
+#             global_best_perm = best_perm.copy()
+#             global_best_kl = best_kl
+#             if verbose:
+#                 print(f"Restart {restart+1}: New global best KL = {global_best_kl:.6f}")
+    
+#     if verbose:
+#         print(f"Final best KL: {global_best_kl:.6f}, Permutation: {global_best_perm}")
+    
+#     return global_best_perm
+
+
+
+
 def compute_perm_minimizing_hfm_kld_simul_anneal(
     emp_states_dict: dict,
     g = np.log(2),
-    initial_temp = 5.0,
-    final_temp = 1e-4,
-    n_iterations = 200000,
+    initial_temp = 1.0,
+    cooling_rate = 0.9995,
+    n_iterations = 50000,
     hfm_distribution = 'pure',
-    n_restarts = 3,
-    reheat_interval = 20000,
-    reheat_factor = 2.0,
-    patience = 30000,
     verbose = False
 ):
     """
-    Uses simulated annealing with restarts and reheating to compute a permutation 
-    of state columns that minimizes the KL divergence between the empirical state 
-    distribution and the HFM model.
+    Uses simulated annealing to compute a permutation of state columns that minimizes
+    the KL divergence between the empirical state distribution and the HFM model.
 
     Args:
         emp_states_dict (dict): Dictionary mapping state tuples to probabilities, with bits already gauge flipped.
         g (float, optional): HFM model parameter. Defaults to np.log(2).
-        initial_temp (float, optional): Initial temperature for simulated annealing. Defaults to 5.0.
-        final_temp (float, optional): Final temperature target. Defaults to 1e-4.
-        n_iterations (int, optional): Number of iterations per restart. Defaults to 200000.
+        initial_temp (float, optional): Initial temperature. Defaults to 1.0.
+        cooling_rate (float, optional): Temperature decay rate per iteration. Defaults to 0.9995.
+        n_iterations (int, optional): Number of iterations. Defaults to 50000.
         hfm_distribution (str, optional): 'pure' or 'marginalized'. Defaults to 'pure'.
-        n_restarts (int, optional): Number of independent restarts. Defaults to 3.
-        reheat_interval (int, optional): Iterations between reheating. Defaults to 20000.
-        reheat_factor (float, optional): Factor to multiply temperature on reheat. Defaults to 2.0.
-        patience (int, optional): Stop early if no improvement for this many iterations. Defaults to 30000.
         verbose (bool, optional): If True, prints progress. Defaults to False.
 
     Returns:
@@ -588,9 +750,6 @@ def compute_perm_minimizing_hfm_kld_simul_anneal(
     """
     
     state_len = len(list(emp_states_dict.keys())[0])
-    
-    # Precompute all swap pairs for efficiency
-    all_swaps = list(combinations(range(state_len), 2))
     
     # Choose KL function based on distribution type
     if hfm_distribution == 'pure':
@@ -600,119 +759,49 @@ def compute_perm_minimizing_hfm_kld_simul_anneal(
     else:
         raise ValueError("hfm_distribution must be 'pure' or 'marginalized'")
     
-    def apply_permutation(perm):
-        """Apply permutation to states dict and compute KL."""
-        permuted = {tuple(k[i] for i in perm): v for k, v in emp_states_dict.items()}
-        return calc_kl(permuted)
+    # Start with identity permutation
+    current_perm = list(range(state_len))
+    current_states = {tuple(k[i] for i in current_perm): v for k, v in emp_states_dict.items()}
+    current_kl = calc_kl(current_states)
     
-    def generate_neighbor(perm, move_type='swap'):
-        """Generate a neighbor permutation using various move types."""
-        new_perm = perm.copy()
-        
-        if move_type == 'swap':
-            # Simple swap of two positions
-            i, j = random.choice(all_swaps)
-            new_perm[i], new_perm[j] = new_perm[j], new_perm[i]
-        
-        elif move_type == 'reverse':
-            # Reverse a random segment
-            i, j = sorted(random.sample(range(state_len), 2))
-            new_perm[i:j+1] = new_perm[i:j+1][::-1]
-        
-        elif move_type == 'insert':
-            # Remove element and insert elsewhere
-            i = random.randrange(state_len)
-            j = random.randrange(state_len)
-            if i != j:
-                elem = new_perm.pop(i)
-                new_perm.insert(j, elem)
-        
-        return new_perm
+    best_perm = current_perm.copy()
+    best_kl = current_kl
     
-    # Exponential cooling rate to reach final_temp
-    cooling_rate = (final_temp / initial_temp) ** (1.0 / n_iterations)
+    temp = initial_temp
     
-    global_best_perm = list(range(state_len))
-    global_best_kl = apply_permutation(global_best_perm)
-    
-    for restart in range(n_restarts):
-        # Initialize with random permutation (except first restart uses identity)
-        if restart == 0:
-            current_perm = list(range(state_len))
-        else:
-            current_perm = list(range(state_len))
-            random.shuffle(current_perm)
+    for iteration in range(n_iterations):
+        # Random swap of two positions
+        i, j = random.sample(range(state_len), 2)
         
-        current_kl = apply_permutation(current_perm)
-        best_perm = current_perm.copy()
-        best_kl = current_kl
+        candidate_perm = current_perm.copy()
+        candidate_perm[i], candidate_perm[j] = candidate_perm[j], candidate_perm[i]
         
-        temp = initial_temp
-        iterations_without_improvement = 0
+        candidate_states = {tuple(k[idx] for idx in candidate_perm): v for k, v in emp_states_dict.items()}
+        candidate_kl = calc_kl(candidate_states)
         
-        for i in range(n_iterations):
-            # Choose move type with probability weights
-            # More swaps early, more diverse moves later
-            if temp > initial_temp * 0.1:
-                move_type = random.choices(
-                    ['swap', 'reverse', 'insert'], 
-                    weights=[0.7, 0.2, 0.1]
-                )[0]
-            else:
-                move_type = 'swap'  # Fine-tuning phase: only swaps
-            
-            candidate_perm = generate_neighbor(current_perm, move_type)
-            candidate_kl = apply_permutation(candidate_perm)
-            
-            delta_kl = candidate_kl - current_kl
-            
-            # Metropolis criterion
-            if delta_kl < 0 or random.random() < math.exp(-delta_kl / temp):
-                current_perm = candidate_perm
-                current_kl = candidate_kl
-                
-                if current_kl < best_kl:
-                    best_perm = current_perm.copy()
-                    best_kl = current_kl
-                    iterations_without_improvement = 0
-                else:
-                    iterations_without_improvement += 1
-            else:
-                iterations_without_improvement += 1
-            
-            # Cooling
-            temp *= cooling_rate
-            
-            # Reheating to escape local minima
-            if (i + 1) % reheat_interval == 0 and temp < initial_temp * 0.5:
-                temp = min(temp * reheat_factor, initial_temp * 0.5)
-                if verbose:
-                    print(f"  Restart {restart+1}, Iter {i+1}: Reheating to temp={temp:.4f}")
-            
-            # Early stopping for this restart
-            if iterations_without_improvement >= patience:
-                if verbose:
-                    print(f"  Restart {restart+1}: Early stop at iter {i+1}, best KL={best_kl:.6f}")
-                break
-            
-            # Periodic progress report
-            if verbose and (i + 1) % 10000 == 0:
-                print(
-                    f"  Restart {restart+1}, Iter {i+1}, Temp: {temp:.4f}, "
-                    f"Current KL: {current_kl:.6f}, Best KL: {best_kl:.6f}"
-                )
+        delta_kl = candidate_kl - current_kl
         
-        # Update global best
-        if best_kl < global_best_kl:
-            global_best_perm = best_perm.copy()
-            global_best_kl = best_kl
-            if verbose:
-                print(f"Restart {restart+1}: New global best KL = {global_best_kl:.6f}")
+        # Metropolis criterion
+        if delta_kl < 0 or random.random() < math.exp(-delta_kl / temp):
+            current_perm = candidate_perm
+            current_kl = candidate_kl
+            
+            if current_kl < best_kl:
+                best_perm = current_perm.copy()
+                best_kl = current_kl
+        
+        # Cool down
+        temp *= cooling_rate
+        
+        if verbose and (iteration + 1) % 10000 == 0:
+            print(f"Iter {iteration+1}, Temp: {temp:.6f}, Current KL: {current_kl:.6f}, Best KL: {best_kl:.6f}")
     
     if verbose:
-        print(f"Final best KL: {global_best_kl:.6f}, Permutation: {global_best_perm}")
+        print(f"Final best KL: {best_kl:.6f}, Permutation: {best_perm}")
     
-    return global_best_perm
+    return best_perm
+
+
 
 
 def calc_ms_mean(emp_states_dict_gauged):

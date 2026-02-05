@@ -40,7 +40,6 @@ def main():
     torch.manual_seed(SEED)
 
     
-    datasets = ["EMNIST"]
 
     train_loaders = {
         "2MNIST": train_loader_2MNIST,
@@ -59,58 +58,9 @@ def main():
     runs_dir = os.path.join(project_root, "runs", "zoomout")
     models_dir = os.path.join(project_root, "models", "zoomout")
 
-
-
-    print("\n\n\n=================STARTING TRAINING QUANTIZED 14ld=================")
-    for dataset in datasets:
-        print(f"\n\n\n------------{dataset}------------\n")
-
-        input_dim = 784
-        learning_rate = 1e-3
-        weight_decay = 1e-5
-        decrease_rate = 0.625
-        train_loader = train_loaders[dataset]
-        val_loader = val_loaders[dataset]
-
-        for train_num in (3,):
-            for latent_dim in (14,16):
-                print(f"\n\n\n-----------------------Training models with {latent_dim} latent_dim----------------------\n\n\n")
-
-                num_hidden_layers = 1
-
-                print(f"\n\n----------------- {num_hidden_layers} num_hidden_layers --------------\n\n")
-
-                new_model = AE_0(input_dim=input_dim, latent_dim=latent_dim, decrease_rate=decrease_rate, hidden_layers=num_hidden_layers, output_activation_encoder=nn.Sigmoid, output_activation_decoder=nn.Sigmoid, quantize_latent=True).to(device)
-                log_dir = os.path.join(runs_dir, "quantized", f'{latent_dim}ld', dataset, f'dr{decrease_rate}_{num_hidden_layers}hl_{train_num}')
-                writer = SummaryWriter(log_dir=log_dir)
-                optimizer = optim.Adam(new_model.parameters(), lr=learning_rate, weight_decay=weight_decay)
-                train(new_model, writer=writer, train_loader=train_loader, val_loader=val_loader, optimizer=optimizer, epochs=40, device=device)
-                os.makedirs(os.path.join(models_dir, "quantized", f'{latent_dim}ld', dataset), exist_ok=True)  
-                save_dir = os.path.join(models_dir, "quantized", f'{latent_dim}ld', dataset, f'dr{decrease_rate}_{num_hidden_layers}hl_{train_num}.pth')
-                torch.save(new_model.state_dict(), save_dir)
-
-                ex_model = AE_0(input_dim=input_dim, latent_dim=latent_dim, decrease_rate=decrease_rate, hidden_layers = num_hidden_layers, output_activation_encoder=nn.Sigmoid, output_activation_decoder=nn.Sigmoid, quantize_latent=True).to(device)
-                ex_model.load_state_dict(new_model.state_dict())
-
-                for num_hidden_layers in range(2,8):
-                    print(f"\n\n----------------- {num_hidden_layers} num_hidden_layers --------------\n\n")
-                    
-                    new_model = AE_0(input_dim=input_dim, latent_dim=latent_dim, decrease_rate=decrease_rate, hidden_layers = num_hidden_layers, output_activation_encoder=nn.Sigmoid, output_activation_decoder=nn.Sigmoid, quantize_latent=True).to(device)
-                    layer_wise_pretrain_load_dict(ex_model, new_model)
-
-                    log_dir = os.path.join(runs_dir, "quantized", f'{latent_dim}ld', dataset, f'dr{decrease_rate}_{num_hidden_layers}hl_{train_num}')
-                    writer = SummaryWriter(log_dir=log_dir)
-                    optimizer = optim.Adam(new_model.parameters(), lr=learning_rate, weight_decay=weight_decay)
-                    train(new_model, writer=writer, train_loader=train_loader, val_loader=val_loader, optimizer=optimizer, epochs=40, device=device)
-                    os.makedirs(os.path.join(models_dir, "quantized", f'{latent_dim}ld', dataset), exist_ok=True)
-                    save_dir = os.path.join(models_dir, "quantized", f'{latent_dim}ld', dataset, f'dr{decrease_rate}_{num_hidden_layers}hl_{train_num}.pth')
-                    torch.save(new_model.state_dict(), save_dir)
-
-                    ex_model = AE_0(input_dim=input_dim, latent_dim=latent_dim, decrease_rate=decrease_rate, hidden_layers = num_hidden_layers, output_activation_encoder=nn.Sigmoid, output_activation_decoder=nn.Sigmoid, quantize_latent=True).to(device)
-                    ex_model.load_state_dict(new_model.state_dict())
-
-    print("\n\n\n=================TRAINING QUANTIZED ENDED=================\n\n\n")
-
+    datasets = ["FEMNIST"]
+    train_numbers = (2,)
+    latent_dims = [16]
 
 
     print("\n\n\n=================STARTING TRAINING QUANTIZED=================")
@@ -124,8 +74,8 @@ def main():
         train_loader = train_loaders[dataset]
         val_loader = val_loaders[dataset]
 
-        for train_num in (4,5):
-            for latent_dim in (10, 12, 14, 16):
+        for train_num in train_numbers:
+            for latent_dim in latent_dims:
                 print(f"\n\n\n-----------------------Training models with {latent_dim} latent_dim----------------------\n\n\n")
 
                 num_hidden_layers = 1
@@ -162,6 +112,7 @@ def main():
                     ex_model.load_state_dict(new_model.state_dict())
 
     print("\n\n\n=================TRAINING QUANTIZED ENDED=================\n\n\n")
+
 
 
 
