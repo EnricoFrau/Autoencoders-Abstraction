@@ -334,18 +334,73 @@ def find_closest_row(vector, matrix):
 
 
 
-def plot_multiple_labels_frequencies_histograms(labels_frequencies_list, labels_list=None, dataset_name=None, cmap_name='inferno', title=None, y_range=None):
-    """
-    Plots multiple label frequency histograms vertically stacked.
-    Accepts a list of arrays (possibly with different lengths).
+# def plot_multiple_labels_frequencies_histograms(labels_frequencies_list, labels_list=None, dataset_name=None, cmap_name='inferno', title=None, y_range=None):
+#     """
+#     Plots multiple label frequency histograms vertically stacked.
+#     Accepts a list of arrays (possibly with different lengths).
 
-    Args:
-        labels_frequencies_list (list of np.ndarray): List of frequency arrays per hidden layer.
-        labels_list (list of np.ndarray, optional): List of label arrays per hidden layer (for coloring).
-        dataset_name (str, optional): Dataset name for title.
-        cmap_name (str, optional): Matplotlib colormap name.
-        title (str, optional): Plot title.
-    """
+#     Args:
+#         labels_frequencies_list (list of np.ndarray): List of frequency arrays per hidden layer.
+#         labels_list (list of np.ndarray, optional): List of label arrays per hidden layer (for coloring).
+#         dataset_name (str, optional): Dataset name for title.
+#         cmap_name (str, optional): Matplotlib colormap name.
+#         title (str, optional): Plot title.
+#     """
+#     import matplotlib.pyplot as plt
+#     import numpy as np
+
+#     k = len(labels_frequencies_list)
+#     fig, axes = plt.subplots(k, 1, figsize=(8, 2*k), sharex=False)
+#     if k == 1:
+#         axes = [axes]
+#     cmap = plt.get_cmap(cmap_name)
+
+#     for idx in range(k):
+#         ax = axes[idx]
+#         freqs = labels_frequencies_list[idx]
+#         n = len(freqs)
+#         if y_range is not None:
+#             ax.set_ylim(y_range)
+
+#         if labels_list is not None:
+#             labels = labels_list[idx]
+#             first_indices = list(find_first_occurrences(labels).values())
+#             first_indices.append(n)
+#             num_segments = len(first_indices) - 1
+
+#             # Get the number of colors in the colormap
+#             n_colors = cmap.N if hasattr(cmap, 'N') else 10  # fallback to 10
+
+#             for i in range(num_segments):
+#                 start = first_indices[i]
+#                 end = first_indices[i+1]
+#                 # Use modulo to cycle through colors
+#                 color = cmap(i % n_colors / max(n_colors - 1, 1))
+#                 ax.bar(range(start, end), freqs[start:end], width=1.5, color=color, label=f'Label {i}' if idx == 0 else None)
+#                 axes[-1].set_xlabel('Datapoint')
+#         else:
+#             ax.bar(range(n), freqs, color=cmap(0.5), width=0.5)
+#             axes[-1].set_xlabel('Label')
+#         ax.set_ylabel(f'{idx+1} hidden layers')
+#         ax.set_xticks([])
+
+
+#     if title is not None:
+#         axes[0].set_title(title)
+#     elif dataset_name is not None:
+#         axes[0].set_title(f"{dataset_name}")
+#     plt.tight_layout()
+
+def plot_multiple_labels_frequencies_histograms(
+    labels_frequencies_list,
+    labels_list=None,
+    dataset_name=None,
+    cmap_name='inferno',
+    title=None,
+    y_range=None,
+    mark_last_n_classes=False,
+    n_mark_classes=10
+):
     import matplotlib.pyplot as plt
     import numpy as np
 
@@ -367,24 +422,32 @@ def plot_multiple_labels_frequencies_histograms(labels_frequencies_list, labels_
             first_indices = list(find_first_occurrences(labels).values())
             first_indices.append(n)
             num_segments = len(first_indices) - 1
-            colors = [cmap(i / max(num_segments - 1, 1)) for i in range(num_segments)]
+
+            n_colors = cmap.N if hasattr(cmap, 'N') else 10
+
             for i in range(num_segments):
                 start = first_indices[i]
                 end = first_indices[i+1]
-                ax.bar(range(start, end), freqs[start:end], width=1.5, color=colors[i], label=f'Label {i}' if idx == 0 else None)
+                color = cmap(i % n_colors / max(n_colors - 1, 1))
+                ax.bar(range(start, end), freqs[start:end], width=1.5, color=color, label=f'Label {i}' if idx == 0 else None)
                 axes[-1].set_xlabel('Datapoint')
+
+            # Mark only the start of the last n_mark_classes-th class
+            if mark_last_n_classes and num_segments > n_mark_classes:
+                x = first_indices[num_segments - n_mark_classes]
+                ax.axvline(x, color='black', linestyle='--', linewidth=1.5)
         else:
             ax.bar(range(n), freqs, color=cmap(0.5), width=0.5)
             axes[-1].set_xlabel('Label')
-        ax.set_ylabel(f'{idx+1} hl')
+        ax.set_ylabel(f'{idx+1} hidden layers')
         ax.set_xticks([])
-
 
     if title is not None:
         axes[0].set_title(title)
     elif dataset_name is not None:
         axes[0].set_title(f"{dataset_name}")
     plt.tight_layout()
+
 
 
 
@@ -474,60 +537,161 @@ def plot_multiple_distances_histograms(unique_frequencies_list, unique_counts_li
 
 
 
-def plot_mean_distance_per_hidden_layer(rep_hl_distances_loaded_mean_mean, rep_hl_distances_loaded_mean_std, ld, dataset):
+# def plot_mean_distance_per_hidden_layer(rep_hl_distances_loaded_mean_mean, rep_hl_distances_loaded_mean_std, ld, dataset):
+#     """
+#     Plots the mean distance per hidden layer with error bars.
+
+#     Args:
+#         rep_hl_distances_loaded_mean_mean (np.ndarray): Mean distances per hidden layer.
+#         rep_hl_distances_loaded_mean_std (np.ndarray): Standard deviation of distances per hidden layer.
+#         ld (int): Latent dimension.
+#         dataset (str): Dataset name.
+#     """
+#     import matplotlib.pyplot as plt
+
+#     num_layers = rep_hl_distances_loaded_mean_mean.shape[0]
+#     plt.figure(figsize=(8, 5))
+#     plt.errorbar(
+#         range(1, num_layers + 1),
+#         rep_hl_distances_loaded_mean_mean,
+#         yerr=rep_hl_distances_loaded_mean_std,
+#         fmt='o-',                # main line: solid
+#         capsize=4,
+#         color='darkred',           # main line color
+#         ecolor='black',          # error bar color
+#         elinewidth=0.5,
+#     )
+#     plt.xlabel('Number of Hidden Layers')
+#     plt.ylabel('Mean Distance')
+#     plt.grid(False)
+#     plt.show()
+
+
+def plot_mean_distance_per_hidden_layer(rep_hl_distances_loaded_mean_mean, rep_hl_distances_loaded_mean_std, ld, dataset, save_dir=None):
     """
-    Plots the mean distance per hidden layer with error bars.
+    Plots the mean distance per hidden layer with error bars, using a thin line and blue-green color style.
 
     Args:
         rep_hl_distances_loaded_mean_mean (np.ndarray): Mean distances per hidden layer.
         rep_hl_distances_loaded_mean_std (np.ndarray): Standard deviation of distances per hidden layer.
         ld (int): Latent dimension.
         dataset (str): Dataset name.
+        save_dir (str, optional): Directory to save the plot.
     """
     import matplotlib.pyplot as plt
 
     num_layers = rep_hl_distances_loaded_mean_mean.shape[0]
-    plt.figure(figsize=(8, 5))
+    x = range(1, num_layers + 1)
+    main_color = "#961313"   # Viridis blue-green
+    error_color = "#433c3a"  # Slightly darker blue-green
+
+    plt.figure(figsize=(10, 6))
     plt.errorbar(
-        range(1, num_layers + 1),
+        x,
         rep_hl_distances_loaded_mean_mean,
         yerr=rep_hl_distances_loaded_mean_std,
-        fmt='o-',                # main line: solid
+        fmt='o-',
         capsize=4,
-        color='darkred',           # main line color
-        ecolor='black',          # error bar color
+        color=main_color,
+        ecolor=error_color,
         elinewidth=0.5,
+        linewidth=1,
+        markersize=5,
     )
-    plt.xlabel('Hidden Layer')
-    plt.ylabel('Mean Distance')
-    plt.title(f'Mean Distance per Hidden Layer - {ld}ld - {dataset}')
+
+    plt.xlabel('Number of Hidden Layers', fontsize=12)
+    plt.ylabel('Mean Distance', fontsize=12)
+    plt.xticks(x, fontsize=11)
+    plt.yticks(fontsize=11)
     plt.grid(False)
+    plt.tight_layout()
+    if save_dir is not None:
+        plt.savefig(f"{save_dir}/mean_distance_per_hidden_layer_{ld}ld_{dataset}.png")
     plt.show()
 
 
 
 
+# def plot_entropy_or_dkltouniform(entropy_or_dkl, ylabel, title, ld, dataset, save_dir=None):
+#     plt.figure(figsize=(10, 6))
+#     plt.plot(range(1, 8), entropy_or_dkl, marker='o')
+#     plt.title(title)
+#     plt.xlabel('Number of Hidden Layers')
+#     plt.ylabel(ylabel)
+#     plt.xticks(range(1, 8))
+#     plt.grid(True)
+#     if save_dir is not None:
+#         plt.savefig(f"{save_dir}/{title.replace(' ', '_').lower()}_{ld}ld_{dataset}.png")
+#     plt.show()
 
-def plot_entropy_or_dkltouniform(entropy_or_dkl, ylabel, title, ld, dataset, save_dir=None):
+def plot_entropy_or_dkltouniform(entropy_or_dkl, ylabel, title, ld, dataset, save_dir=None, std=None):
     plt.figure(figsize=(10, 6))
-    plt.plot(range(1, 8), entropy_or_dkl, marker='o')
+    x = range(1, len(entropy_or_dkl) + 1)
+    # Use a blue-green color for the main line and error bars
+    main_color = '#1f9e89'  # Viridis blue-green
+    error_color = "#353a3c" # Slightly darker blue-green
+    if std is not None:
+        plt.errorbar(
+            x,
+            entropy_or_dkl,
+            yerr=std,
+            fmt='o-',
+            capsize=4,
+            color=main_color,      # main line color
+            ecolor=error_color,    # error bar color
+            elinewidth=0.5,
+        )
+    else:
+        plt.plot(x, entropy_or_dkl, marker='o', color=main_color)
     plt.title(title)
     plt.xlabel('Number of Hidden Layers')
     plt.ylabel(ylabel)
-    plt.xticks(range(1, 8))
-    plt.grid(True)
+    plt.xticks(x)
+    plt.grid(False)
     if save_dir is not None:
         plt.savefig(f"{save_dir}/{title.replace(' ', '_').lower()}_{ld}ld_{dataset}.png")
     plt.show()
 
 
 
-def compute_entropy_and_dkl(datapoints_freq_list_loaded):
+
+
+
+
+# def compute_entropy_and_dkl(datapoints_freq_list_loaded):
+#     """
+#     Computes entropy and KL divergence to uniform for rep_hl_datapoints_freq.
+#     Returns:
+#         entropy_mean: mean entropy per hidden layer (shape: [num_hidden_layers])
+#         dkl_uniform_mean: mean KL divergence to uniform (shape: [num_hidden_layers])
+#         dkl_uniform_std: std KL divergence to uniform (shape: [num_hidden_layers])
+#     """
+#     rep_hl_datapoints_freq = torch.tensor(datapoints_freq_list_loaded, dtype=torch.float64)
+#     rep_hl_datapoints_freq /= rep_hl_datapoints_freq.sum(dim=-1, keepdim=True)
+    
+#     distr_rep_hl_datapoints_freq = torch.distributions.Categorical(rep_hl_datapoints_freq)
+#     entropy_mean = distr_rep_hl_datapoints_freq.entropy().mean(axis=0).numpy()
+    
+#     uniform_tensor = torch.full_like(rep_hl_datapoints_freq, 1.0 / rep_hl_datapoints_freq.size(-1))
+#     p = rep_hl_datapoints_freq.cpu().numpy()
+#     q = uniform_tensor.cpu().numpy()
+#     dkl_elementwise = rel_entr(p, q)  # shape (reps, hls, datapoints)
+#     dkl_uniform = dkl_elementwise.sum(axis=-1)  # shape (reps, hls)
+#     dkl_uniform_mean = dkl_uniform.mean(axis=0)  # shape (hls,)
+#     dkl_uniform_std = dkl_uniform.std(axis=0)    # shape (hls,)
+    
+#     return entropy_mean, dkl_uniform_mean, dkl_uniform_std
+
+
+
+
+def compute_entropy_and_dkl(datapoints_freq_list_loaded, ld):
     """
     Computes entropy and KL divergence to uniform for rep_hl_datapoints_freq.
     Returns:
         entropy_mean: mean entropy per hidden layer (shape: [num_hidden_layers])
-        dkl_uniform: KL divergence to uniform (shape: [num_repetitions, num_hidden_layers])
+        dkl_uniform_mean: mean KL divergence to uniform (shape: [num_hidden_layers]), normalized by ld
+        dkl_uniform_std: std KL divergence to uniform (shape: [num_hidden_layers]), normalized by ld
     """
     rep_hl_datapoints_freq = torch.tensor(datapoints_freq_list_loaded, dtype=torch.float64)
     rep_hl_datapoints_freq /= rep_hl_datapoints_freq.sum(dim=-1, keepdim=True)
@@ -539,19 +703,11 @@ def compute_entropy_and_dkl(datapoints_freq_list_loaded):
     p = rep_hl_datapoints_freq.cpu().numpy()
     q = uniform_tensor.cpu().numpy()
     dkl_elementwise = rel_entr(p, q)  # shape (reps, hls, datapoints)
-    dkl_uniform = dkl_elementwise.sum(axis=-1).mean(axis=0)  # shape (hls,)
+    dkl_uniform = dkl_elementwise.sum(axis=-1)  # shape (reps, hls)
+    dkl_uniform_mean = dkl_uniform.mean(axis=0) / ld  # normalize by ld
+    dkl_uniform_std = dkl_uniform.std(axis=0) / ld    # normalize by ld
     
-    return entropy_mean, dkl_uniform
-
-
-
-
-
-
-
-
-
-
+    return entropy_mean, dkl_uniform_mean, dkl_uniform_std
 
 
 

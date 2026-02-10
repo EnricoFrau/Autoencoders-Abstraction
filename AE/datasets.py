@@ -333,9 +333,48 @@ def MNIST_digit2_translated_dataset(train=True, download=True, target_size=60000
 
 
 
+# class FEMNISTDataset(Dataset):
+#     """
+#     Dataset that merges EMNIST (balanced split) and FashionMNIST.
+#     Each sample is a tuple: (image, label)
+#     """
+#     def __init__(self, train=True, download=True, transform=None):
+#         if transform is None:
+#             transform = transforms.ToTensor()
+
+#         emnist = datasets.EMNIST(
+#             root=datasets_path,
+#             split='balanced',
+#             train=train,
+#             download=download,
+#             transform=transform
+#         )
+
+#         fashionmnist = datasets.FashionMNIST(
+#             root=datasets_path,
+#             train=train,
+#             download=download,
+#             transform=transform
+#         )
+#         self.emnist_data = emnist
+#         self.fashionmnist_data = fashionmnist
+#         self.length = len(emnist) + len(fashionmnist)
+
+#     def __len__(self):
+#         return self.length
+
+#     def __getitem__(self, idx):
+#         if idx < len(self.emnist_data):
+#             image, label = self.emnist_data[idx]
+#         else:
+#             image, label = self.fashionmnist_data[idx - len(self.emnist_data)]
+#         return image, label
+    
+
 class FEMNISTDataset(Dataset):
     """
-    Dataset that merges EMNIST (balanced split) and FashionMNIST.
+    Dataset that merges EMNIST (balanced split) and FashionMNIST,
+    with unique labels: EMNIST [0-46], FashionMNIST [47-56].
     Each sample is a tuple: (image, label)
     """
     def __init__(self, train=True, download=True, transform=None):
@@ -349,7 +388,6 @@ class FEMNISTDataset(Dataset):
             download=download,
             transform=transform
         )
-
         fashionmnist = datasets.FashionMNIST(
             root=datasets_path,
             train=train,
@@ -359,6 +397,7 @@ class FEMNISTDataset(Dataset):
         self.emnist_data = emnist
         self.fashionmnist_data = fashionmnist
         self.length = len(emnist) + len(fashionmnist)
+        self.num_emnist_classes = 47  # EMNIST balanced split has 47 classes
 
     def __len__(self):
         return self.length
@@ -366,8 +405,10 @@ class FEMNISTDataset(Dataset):
     def __getitem__(self, idx):
         if idx < len(self.emnist_data):
             image, label = self.emnist_data[idx]
+            # EMNIST labels: 0-46
         else:
             image, label = self.fashionmnist_data[idx - len(self.emnist_data)]
+            label += self.num_emnist_classes  # Offset FashionMNIST labels: 47-56
         return image, label
 
 

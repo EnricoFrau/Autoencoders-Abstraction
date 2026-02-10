@@ -324,3 +324,83 @@ def calc_hfm_kld_with_marginalized_hfm(emp_states_dict, g):
 
 
 
+def calc_MSE_loss(model, dataset_loader, l1_lambda=0.0, device=None):
+    """
+    Return the loss computed exactly as in the train(...) function:
+    sum over batches of (MSE(output, data) + l1_lambda * sum(abs(params))) 
+    divided by len(dataset_loader.dataset).
+    """
+    import torch
+    import torch.nn as nn
+
+    model.eval()
+    if device is None:
+        try:
+            device = model.device
+        except AttributeError:
+            # fallback to first parameter device
+            device = next(model.parameters()).device
+
+    total_loss = 0.0
+    mse = nn.MSELoss()
+    with torch.no_grad():
+        for data, _ in dataset_loader:
+            data = data.to(device)
+            output = model(data)
+            batch_loss = mse(output, data)
+            # L1 term added exactly as in train()
+            l1_term = l1_lambda * sum(p.abs().sum() for p in model.parameters())
+            total_loss += (batch_loss + l1_term).item()
+
+    # Use same denominator as train(): len(dataset_loader.dataset) if available
+    try:
+        denom = len(dataset_loader.dataset)
+    except Exception:
+        # fallback: total number of samples iterated (approx)
+        denom = sum(d.size(0) for d, _ in dataset_loader)
+
+    return total_loss / denom
+
+
+
+def dataset_mse(model, data_loader, device=None):
+    """
+    Compute MSE over a whole dataset using the same per-batch mean loss as `train`.
+    This matches train(...) which uses nn.MSELoss() (default reduction='mean'),
+    accumulates batch losses and then divides by len(dataset).
+    Args:
+        model: torch.nn.Module (AE_0) - forward(x) should return reconstruction or (recon, ...)
+        data_loader: torch.utils.data.DataLoader
+        device: torch.device or None (if None, prefer model.device then model params)
+    Returns:
+        float: loss value computed the same way as in train()
+    """
+    import torch
+    import torch.nn as nn
+    import math
+
+    model.eval()
+    if device is None:
+        device = getattr(model, "device", None)
+        if device is None:
+            try:
+                device = next(model.parameters()).device
+            except StopIteration:
+                device = torch.device("cpu")
+
+    loss_fn = nn.MSELoss(reduction='mean')  # default reduction='mean' to match train()
+    total_loss = 0.0
+
+    with torch.no_grad():
+        for batch in data_loader:
+            x = batch[0] if isinstance(batch, (list, tuple)) else batch
+            x = x.to(device)
+            out = model(x)
+            recon = out[0] if isinstance(out, (list, tuple)) else out
+            # ensure shapes compatible
+            if recon.shape != x.shape and recon.dim() == 2 and x.dim() > 2 and recon.size(0) == x.size(0):
+                recon = recon.view_as(x)
+            total_loss += loss_fn(recon, x).item()
+
+    dataset_size = len(getattr(data_loader, "dataset", []))
+    return total_loss / dataset_size if dataset_size > 0 else float("nan")

@@ -39,10 +39,9 @@ def main():
     SEED = 57
     torch.manual_seed(SEED)
 
-    
-    datasets = ["EMNIST", "FEMNIST"]
+    datasets = ["2MNIST", "MNIST", "EMNIST", "FEMNIST"]
     train_nums = range(6)
-    latent_dims = [16]
+    latent_dims = [10,12,14,16]
 
     train_loaders = {
         "2MNIST": train_loader_2MNIST,
@@ -106,9 +105,9 @@ def main():
             print(f"[{current_time.strftime('%H:%M:%S')}] [Elapsed: {elapsed_str}] Completed dataset {dataset} for latent_dim={latent_dim} ({i+1}/{len(datasets)})")
 
         os.makedirs(os.path.join(project_root, 'savings', 'zoomout', 'klds_gs', 'quantized', f'{latent_dim}ld'), exist_ok=True)
-        with open(os.path.join(project_root, 'savings', 'zoomout', 'klds_gs', 'quantized', f'{latent_dim}ld', 'dataset_klds_dict.pkl'), 'wb') as f:
+        with open(os.path.join(project_root, 'savings', 'zoomout', 'klds_gs', 'quantized', f'{latent_dim}ld', f'dataset_klds_dict.pkl'), 'wb') as f:
             pickle.dump(dataset_klds_dict, f)
-        with open(os.path.join(project_root, 'savings', 'zoomout','klds_gs', 'quantized', f'{latent_dim}ld', 'dataset_gs_dict.pkl'), 'wb') as f:
+        with open(os.path.join(project_root, 'savings', 'zoomout','klds_gs', 'quantized', f'{latent_dim}ld', f'dataset_gs_dict.pkl'), 'wb') as f:
             pickle.dump(dataset_gs_dict, f)
 
 

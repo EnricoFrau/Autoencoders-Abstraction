@@ -2,7 +2,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-
 from AE.utils import calc_hfm_kld
 from AE.utils import calc_Z_theoretical, calc_hfm_prob
 from AE.utils import calc_ms
@@ -669,7 +668,7 @@ def datasets_dicts_comparison(klds_dict, save_dir = None):                      
 
 
 def datasets_dicts_comparison_colored(
-    klds_dict, gs_dict, save_dir=None, title=None, std_dict=None, slice_indices=None
+    klds_dict, gs_dict, save_dir=None, title=None, std_dict=None, slice_indices=None, plt_labels=True
 ):
     """
     Plots KL values for each dataset in klds_dict on the same graph.
@@ -751,8 +750,9 @@ def datasets_dicts_comparison_colored(
             lc.set_linestyle("--")
             plt.gca().add_collection(lc)
 
-    plt.xlabel("Number of hidden layers")
-    plt.ylabel("Dkl with HFM")
+    if plt_labels:
+        plt.xlabel("Number of hidden layers")
+        plt.ylabel("Dkl with HFM")
     plt.title(title)
     plt.legend()
     plt.grid(True)
@@ -803,3 +803,158 @@ def analyze_binary_frequencies(frequency_dict, top_k=10):
     plt.show()
     
     return sorted_states
+
+
+
+def plot_mean_loss_over_depth(rep_dataset_train_loss_dict,
+                              datasets=None,
+                              num_hidden_layers_range=range(1,8),
+                              show_std=True,
+                              figsize=(8,5),
+                              title="Mean loss vs # hidden layers",
+                              xlabel="Number of hidden layers",
+                              ylabel="MSE",
+                              save_path=None,
+                              show_legend=True,
+                              ax=None,
+                              cmap='tab10'):  # added cmap param
+    """
+    Compute mean (and std) across train_num realizations and plot loss vs depth.
+    ...
+    Args:
+        ...
+        cmap: matplotlib colormap name or Colormap instance used to color datasets
+    ...
+    """
+    # collect train_nums
+    train_nums = sorted(rep_dataset_train_loss_dict.keys())
+    if len(train_nums) == 0:
+        raise ValueError("rep_dataset_train_loss_dict is empty")
+
+    # infer datasets
+    first_inner = rep_dataset_train_loss_dict[train_nums[0]]
+    if datasets is None:
+        datasets = list(first_inner.keys())
+
+    # prepare output
+    mean_dict = {}
+    std_dict = {}
+
+    depths = list(num_hidden_layers_range)
+
+    for ds in datasets:
+        # gather lists from each train_num if available
+        rows = []
+        for tn in train_nums:
+            inner = rep_dataset_train_loss_dict.get(tn, {})
+            vals = inner.get(ds)
+            if vals is None:
+                continue
+            # ensure it's a numpy 1d array
+            rows.append(np.asarray(vals))
+
+        if len(rows) == 0:
+            # no data for this dataset
+            mean_dict[ds] = []
+            std_dict[ds] = []
+            continue
+
+        # align lengths: use minimum available length across realizations
+        min_len = min(r.shape[0] for r in rows)
+        stacked = np.vstack([r[:min_len] for r in rows])
+        mean = stacked.mean(axis=0)
+        std = stacked.std(axis=0)
+
+        mean_dict[ds] = mean.tolist()
+        std_dict[ds] = std.tolist()
+
+    # plotting
+    if ax is None:
+        fig, ax = plt.subplots(figsize=figsize)
+
+    # prepare colors from cmap
+    import matplotlib as mpl
+    cmap_obj = plt.get_cmap(cmap) if isinstance(cmap, str) else cmap
+    n = max(1, len(mean_dict))
+    # sample colormap evenly
+    colors = [cmap_obj(i/(n-1)) if n>1 else cmap_obj(0) for i in range(n)]
+
+    for idx, (ds_key, mean) in enumerate(mean_dict.items()):
+        if len(mean) == 0:
+            continue
+        x_plot = depths[:len(mean)]
+        color = colors[idx]
+        ax.plot(x_plot, mean, marker='o', label=ds_key, linewidth=1.5, markersize=3, color=color)
+        if show_std and len(std_dict.get(ds_key, [])) == len(mean):
+            std = np.asarray(std_dict[ds_key])
+            ax.fill_between(x_plot, np.asarray(mean)-std, np.asarray(mean)+std, alpha=0.25, color=color)
+
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    ax.set_title(title)
+    ax.set_xticks(depths)
+    ax.grid(False)
+    if show_legend:
+        ax.legend()
+
+    if save_path:
+        plt.savefig(save_path, bbox_inches='tight')
+
+    return mean_dict, std_dict
+
+
+
+
+def plot_multiple_distance_histograms_line(
+    distances_list,
+    labels_list,
+    bins=50,
+    colors=None,
+    linestyles=None,
+    title="Comparison of Reconstruction Distances",
+    xlim=None,
+    ylim=None,
+    density = False,
+):
+    """
+    Plots multiple histograms as line plots (only top segments) for comparison.
+
+    Args:
+        distances_list (list): List of 1D arrays/tensors of distances.
+        labels_list (list): List of labels for the legend.
+        bins (int): Number of bins.
+        colors (list, optional): List of colors for each histogram.
+        linestyles (list, optional): List of line styles for each histogram.
+        title (str): Plot title.
+        xlim, ylim: Axis limits.
+    """
+    plt.figure(figsize=(8, 5))
+    n = len(distances_list)
+    if colors is None:
+        colors = plt.cm.tab10.colors
+    if linestyles is None:
+        linestyles = ['-','--','-.',':'] * ((n // 4) + 1)
+
+    for i, distances in enumerate(distances_list):
+        data = distances.cpu().numpy() if hasattr(distances, "cpu") else np.asarray(distances)
+        counts, bin_edges = np.histogram(data, bins=bins, density=density)
+        bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+        plt.plot(
+            bin_centers, counts,
+            label=labels_list[i],
+            color=colors[i % len(colors)],
+            linestyle=linestyles[i % len(linestyles)],
+            linewidth=2
+        )
+
+    plt.xlabel("Reconstruction Distance (MSE)")
+    plt.ylabel("Count" if not density else "Density")
+    plt.title(title)
+    plt.legend()
+    plt.grid(True, linestyle=':', alpha=0.5)
+    if xlim is not None:
+        plt.xlim(xlim)
+    if ylim is not None:
+        plt.ylim(ylim)
+    plt.tight_layout()
+    plt.show()
